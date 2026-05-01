@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FractureAI — Early Fracture Healing Prediction</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- ── Navbar ─────────────────────────────────────────────────────── -->
+<nav class="navbar">
+  <div class="navbar-inner">
+    <div class="navbar-brand">
+      🦴 Fracture<span class="dot">AI</span>
+    </div>
+    <div class="navbar-links">
+      <a href="#features">Features</a>
+      <a href="#how-it-works">How It Works</a>
+      <a href="#tech">Technology</a>
+      <a href="dashboard" class="navbar-cta">Open Dashboard →</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ── 1. Hero ──────────────────────────────────────────────────────── -->
+<section class="hero">
+  <div class="hero-inner">
+    <div class="hero-grid">
+      <div>
+        <div class="hero-badge">🔬 AI-Powered Clinical Tool</div>
+        <h1>Predict Fracture Healing <em style="font-style:normal;color:#7dd3fc">Early</em></h1>
+        <p>
+          An intelligent platform that analyses serum biomarkers and radiological callus data to predict
+          fracture healing outcomes at Week 3 — weeks before conventional imaging can confirm union.
+        </p>
+        <div class="hero-actions">
+          <a href="dashboard" class="btn btn-white btn-lg">Enter Patient Data →</a>
+          <a href="#how-it-works" class="btn btn-ghost">See How It Works</a>
+        </div>
+        <div class="hero-stats">
+          <div class="stat-card">
+            <span class="stat-num">5</span>
+            <div class="stat-label">ML Models Compared</div>
+          </div>
+          <div class="stat-card">
+            <span class="stat-num">3</span>
+            <div class="stat-label">Biomarker Time Points</div>
+          </div>
+          <div class="stat-card">
+            <span class="stat-num">~92%</span>
+            <div class="stat-label">CV Accuracy</div>
+          </div>
+        </div>
+      </div>
+      <div class="hero-visual">
+        <div class="hero-card">
+          <div class="hero-card-label">Healing Probability</div>
+          <div class="hero-card-value">82%</div>
+          <div class="hero-card-sub">Good healing trajectory predicted</div>
+          <div class="healing-bar"><div class="healing-bar-fill" style="width:82%"></div></div>
+        </div>
+        <div class="hero-card">
+          <div class="hero-card-label">BSAP Trend (Day1 → Week6)</div>
+          <div class="hero-card-value">+34%</div>
+          <div class="hero-card-sub">Rising osteoblast activity — strong callus signal</div>
+        </div>
+        <div class="hero-card">
+          <div class="hero-card-label">Similar Cases Retrieved</div>
+          <div class="hero-card-value">3 cases</div>
+          <div class="hero-card-sub">87–93% similarity from vector store</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── 2. What It Does ─────────────────────────────────────────────── -->
+<section class="section section-alt" id="features">
+  <div class="container text-center">
+    <div class="tag">Platform Overview</div>
+    <h2 class="section-title">Everything a Clinician Needs, Instantly</h2>
+    <p class="section-subtitle">
+      From raw biomarker values to a complete clinical narrative — in seconds.
+    </p>
+    <div class="feature-grid mt-40">
+      <div class="card">
+        <div class="feature-icon">📊</div>
+        <h3>Biomarker Analysis</h3>
+        <p class="mt-8">
+          Tracks BSAP, ALP, and P1NP across Day 1, Week 3, and Week 6. Computes trend deltas and
+          flags abnormal patterns automatically.
+        </p>
+      </div>
+      <div class="card">
+        <div class="feature-icon">🤖</div>
+        <h3>5-Model ML Ensemble</h3>
+        <p class="mt-8">
+          Random Forest, XGBoost, Logistic Regression, SVM, and Gradient Boosting run in parallel.
+          The best model's result is highlighted; all scores are displayed.
+        </p>
+      </div>
+      <div class="card">
+        <div class="feature-icon">📡</div>
+        <h3>RAG-Powered Case Retrieval</h3>
+        <p class="mt-8">
+          ChromaDB vector store finds the 3 most similar historical patients using semantic
+          similarity on biomarker summaries.
+        </p>
+      </div>
+      <div class="card">
+        <div class="feature-icon">🌐</div>
+        <h3>Tavily Literature Search</h3>
+        <p class="mt-8">
+          Retrieves relevant fracture healing research from the web in real time, grounding the
+          AI explanation in current medical evidence.
+        </p>
+      </div>
+      <div class="card">
+        <div class="feature-icon">💬</div>
+        <h3>GPT-4o Clinical Narrative</h3>
+        <p class="mt-8">
+          OpenAI GPT-4o synthesises ML results, biomarker trends, similar cases, and literature
+          into a structured 3–4 paragraph clinical explanation.
+        </p>
+      </div>
+      <div class="card">
+        <div class="feature-icon">🔗</div>
+        <h3>MCP Integration</h3>
+        <p class="mt-8">
+          All 4 prediction tools are exposed via Model Context Protocol — register the server in
+          Claude Desktop for agentic clinical workflows.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── 3. Why It Matters ───────────────────────────────────────────── -->
+<section class="section" id="why">
+  <div class="container">
+    <div class="why-grid">
+      <div>
+        <div class="tag">The Problem</div>
+        <h2 class="section-title">Current Monitoring Falls Short</h2>
+        <p>
+          Fracture healing is primarily assessed through X-rays and clinical symptoms —
+          methods that detect problems <em>after</em> the optimal intervention window has closed.
+        </p>
+        <div class="problem-list">
+          <div class="problem-item">
+            <div class="icon">❌</div>
+            <div>
+              <strong>X-rays show healing changes late</strong>
+              <p>Radiological confirmation of union typically takes 6–12 weeks</p>
+            </div>
+          </div>
+          <div class="problem-item">
+            <div class="icon">❌</div>
+            <div>
+              <strong>No integrated biomarker system</strong>
+              <p>BSAP, ALP, and P1NP data are collected but never synthesised for prognosis</p>
+            </div>
+          </div>
+          <div class="problem-item">
+            <div class="icon">❌</div>
+            <div>
+              <strong>Non-union identified too late</strong>
+              <p>5–10% of fractures develop non-union; current tools catch it at 3–6 months</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="tag">Our Solution</div>
+        <h2 class="section-title">Early Prediction at Week 3</h2>
+        <p>
+          FractureAI uses biochemical markers collected routinely in orthopaedic care to generate
+          a healing prediction weeks before radiological signs appear.
+        </p>
+        <div class="solution-list">
+          <div class="solution-item">
+            <div class="icon">✅</div>
+            <div>
+              <strong>Predict at Week 3, intervene at Week 4</strong>
+              <p>Actionable risk stratification while intervention is still effective</p>
+            </div>
+          </div>
+          <div class="solution-item">
+            <div class="icon">✅</div>
+            <div>
+              <strong>Integrates all available data</strong>
+              <p>Demographics, 15 biomarker readings, and callus measurements combined</p>
+            </div>
+          </div>
+          <div class="solution-item">
+            <div class="icon">✅</div>
+            <div>
+              <strong>Explainable AI output</strong>
+              <p>Not a black box — every prediction comes with a clinical narrative and evidence links</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── 4. How It Works ─────────────────────────────────────────────── -->
+<section class="section section-alt" id="how-it-works">
+  <div class="container text-center">
+    <div class="tag">Workflow</div>
+    <h2 class="section-title">Six Steps from Input to Insight</h2>
+    <p class="section-subtitle">The platform automates a complex clinical pipeline in under 5 seconds.</p>
+    <div class="steps-grid">
+      <div class="card step-card">
+        <div class="step-num">1</div>
+        <h3>Enter Patient Data</h3>
+        <p class="mt-8">Input demographics, biomarker values at three time points, and callus measurements via the dashboard form.</p>
+      </div>
+      <div class="card step-card">
+        <div class="step-num">2</div>
+        <h3>Feature Engineering</h3>
+        <p class="mt-8">The backend computes 32-dimensional feature vectors including trend deltas, ratios, and callus growth rate.</p>
+      </div>
+      <div class="card step-card">
+        <div class="step-num">3</div>
+        <h3>5-Model Prediction</h3>
+        <p class="mt-8">Five ML classifiers run in parallel. XGBoost leads; all scores are shown for transparency.</p>
+      </div>
+      <div class="card step-card">
+        <div class="step-num">4</div>
+        <h3>Similar Case Retrieval</h3>
+        <p class="mt-8">ChromaDB finds 3 historically similar patients using MiniLM embeddings and cosine similarity.</p>
+      </div>
+      <div class="card step-card">
+        <div class="step-num">5</div>
+        <h3>Literature Search</h3>
+        <p class="mt-8">Tavily queries medical databases for current evidence on the patient's fracture type and biomarker pattern.</p>
+      </div>
+      <div class="card step-card">
+        <div class="step-num">6</div>
+        <h3>Clinical Report</h3>
+        <p class="mt-8">GPT-4o synthesises everything into a structured clinical narrative with risk flags and recommendations.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── 5. Tech Stack ───────────────────────────────────────────────── -->
+<section class="section" id="tech">
+  <div class="container text-center">
+    <div class="tag">Technology</div>
+    <h2 class="section-title">Built on Production-Grade Components</h2>
+    <div class="tech-grid">
+      <div class="tech-card">
+        <div class="tech-icon">⚡</div>
+        <h3>FastAPI</h3>
+        <p class="mt-8" style="font-size:0.85rem">High-performance async Python API. Serves both REST endpoints and static frontend.</p>
+      </div>
+      <div class="tech-card">
+        <div class="tech-icon">🗄️</div>
+        <h3>ChromaDB</h3>
+        <p class="mt-8" style="font-size:0.85rem">Persistent vector database for patient case similarity retrieval using cosine embeddings.</p>
+      </div>
+      <div class="tech-card">
+        <div class="tech-icon">🌐</div>
+        <h3>Tavily Search</h3>
+        <p class="mt-8" style="font-size:0.85rem">Real-time medical literature retrieval to ground AI explanations in current evidence.</p>
+      </div>
+      <div class="tech-card">
+        <div class="tech-icon">🤖</div>
+        <h3>OpenAI GPT-4o</h3>
+        <p class="mt-8" style="font-size:0.85rem">State-of-the-art LLM for generating structured, evidence-grounded clinical narratives.</p>
+      </div>
+      <div class="tech-card">
+        <div class="tech-icon">🌲</div>
+        <h3>XGBoost + scikit-learn</h3>
+        <p class="mt-8" style="font-size:0.85rem">Five ensemble models trained on biomarker tabular data with stratified 5-fold CV.</p>
+      </div>
+      <div class="tech-card">
+        <div class="tech-icon">🔗</div>
+        <h3>MCP Protocol</h3>
+        <p class="mt-8" style="font-size:0.85rem">Model Context Protocol server — all tools callable directly from Claude Desktop or agents.</p>
+      </div>
+      <div class="tech-card">
+        <div class="tech-icon">🧠</div>
+        <h3>MiniLM Embeddings</h3>
+        <p class="mt-8" style="font-size:0.85rem">all-MiniLM-L6-v2 runs locally — no per-token cost, 384-dim semantic embeddings.</p>
+      </div>
+      <div class="tech-card">
+        <div class="tech-icon">📈</div>
+        <h3>Chart.js</h3>
+        <p class="mt-8" style="font-size:0.85rem">Interactive biomarker trend charts rendered client-side with no bundler required.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── 6. CTA ──────────────────────────────────────────────────────── -->
+<section class="cta-section">
+  <div class="container">
+    <h2>Ready to Predict Healing Outcomes?</h2>
+    <p>Enter a patient's biomarker values and get a full AI-powered clinical report in seconds.</p>
+    <a href="dashboard" class="btn btn-white btn-lg">Open Patient Dashboard →</a>
+  </div>
+</section>
+
+<!-- ── Footer ─────────────────────────────────────────────────────── -->
+<footer>
+  <div class="container">
+    <p>FractureAI — AI-Based Early Prediction Tool for Fracture Healing</p>
+    <p style="margin-top:8px">Built with FastAPI · ChromaDB · Tavily · OpenAI · scikit-learn</p>
+  </div>
+</footer>
+
+</body>
+</html>

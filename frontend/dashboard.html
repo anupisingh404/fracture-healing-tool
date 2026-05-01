@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FractureAI — Patient Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<!-- ── Navbar ─────────────────────────────────────────────────────── -->
+<nav class="navbar">
+  <div class="navbar-inner">
+    <a href="/" class="navbar-brand">🦴 Fracture<span class="dot">AI</span></a>
+    <div class="navbar-links">
+      <a href="/">← Back to Home</a>
+      <a href="#" id="reset-btn" style="color:var(--poor)">Reset Form</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ── Main layout ─────────────────────────────────────────────────── -->
+<div class="dashboard-layout">
+
+  <!-- ──────────── LEFT: INPUT FORM ──────────── -->
+  <div class="form-panel">
+    <div class="form-panel-header">
+      <h2>Patient Data Entry</h2>
+      <p style="font-size:0.85rem;color:var(--text-muted);margin-top:4px">
+        Enter biomarker values at three time points to generate a healing prediction.
+      </p>
+    </div>
+    <div class="form-body">
+      <form id="patient-form" novalidate>
+
+        <!-- Demographics -->
+        <div class="form-section">
+          <div class="form-section-title">Demographics</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="age">Age (years)</label>
+              <input type="number" id="age" min="0" max="120" placeholder="e.g. 45" required />
+            </div>
+            <div class="form-group">
+              <label>Gender</label>
+              <div class="radio-group">
+                <label class="radio-label"><input type="radio" name="gender" value="male" checked /> Male</label>
+                <label class="radio-label"><input type="radio" name="gender" value="female" /> Female</label>
+                <label class="radio-label"><input type="radio" name="gender" value="other" /> Other</label>
+              </div>
+            </div>
+          </div>
+          <div class="form-group mt-16">
+            <label for="fracture_location">Fracture Location</label>
+            <select id="fracture_location">
+              <option value="femur">Femur</option>
+              <option value="tibia">Tibia</option>
+              <option value="radius">Radius</option>
+              <option value="ulna">Ulna</option>
+              <option value="humerus">Humerus</option>
+              <option value="fibula">Fibula</option>
+              <option value="pelvis">Pelvis</option>
+              <option value="vertebra">Vertebra</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Biomarkers -->
+        <div class="form-section">
+          <div class="form-section-title">Biomarker Values (BSAP · ALP · P1NP)</div>
+          <div class="tabs" id="bio-tabs">
+            <button type="button" class="tab-btn active" data-tab="bio-d1">Day 1</button>
+            <button type="button" class="tab-btn" data-tab="bio-w3">Week 3</button>
+            <button type="button" class="tab-btn" data-tab="bio-w6">Week 6</button>
+          </div>
+          <div id="bio-d1" class="tab-panel active">
+            <div class="form-row cols-3">
+              <div class="form-group"><label>BSAP (U/L)</label><input type="number" id="bsap_d1" step="0.1" placeholder="e.g. 28" /></div>
+              <div class="form-group"><label>ALP (U/L)</label><input type="number" id="alp_d1" step="0.1" placeholder="e.g. 75" /></div>
+              <div class="form-group"><label>P1NP (ng/mL)</label><input type="number" id="p1np_d1" step="0.1" placeholder="e.g. 50" /></div>
+            </div>
+          </div>
+          <div id="bio-w3" class="tab-panel">
+            <div class="form-row cols-3">
+              <div class="form-group"><label>BSAP (U/L)</label><input type="number" id="bsap_w3" step="0.1" placeholder="e.g. 36" /></div>
+              <div class="form-group"><label>ALP (U/L)</label><input type="number" id="alp_w3" step="0.1" placeholder="e.g. 90" /></div>
+              <div class="form-group"><label>P1NP (ng/mL)</label><input type="number" id="p1np_w3" step="0.1" placeholder="e.g. 65" /></div>
+            </div>
+          </div>
+          <div id="bio-w6" class="tab-panel">
+            <div class="form-row cols-3">
+              <div class="form-group"><label>BSAP (U/L)</label><input type="number" id="bsap_w6" step="0.1" placeholder="e.g. 42" /></div>
+              <div class="form-group"><label>ALP (U/L)</label><input type="number" id="alp_w6" step="0.1" placeholder="e.g. 105" /></div>
+              <div class="form-group"><label>P1NP (ng/mL)</label><input type="number" id="p1np_w6" step="0.1" placeholder="e.g. 78" /></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mineral Markers -->
+        <div class="form-section">
+          <div class="form-section-title">Mineral Markers (Calcium · Phosphorus)</div>
+          <div class="tabs" id="min-tabs">
+            <button type="button" class="tab-btn active" data-tab="min-d1">Day 1</button>
+            <button type="button" class="tab-btn" data-tab="min-w3">Week 3</button>
+            <button type="button" class="tab-btn" data-tab="min-w6">Week 6</button>
+          </div>
+          <div id="min-d1" class="tab-panel active">
+            <div class="form-row">
+              <div class="form-group"><label>Calcium (mg/dL)</label><input type="number" id="ca_d1" step="0.1" placeholder="e.g. 9.5" /></div>
+              <div class="form-group"><label>Phosphorus (mg/dL)</label><input type="number" id="phos_d1" step="0.1" placeholder="e.g. 3.5" /></div>
+            </div>
+          </div>
+          <div id="min-w3" class="tab-panel">
+            <div class="form-row">
+              <div class="form-group"><label>Calcium (mg/dL)</label><input type="number" id="ca_w3" step="0.1" placeholder="e.g. 9.3" /></div>
+              <div class="form-group"><label>Phosphorus (mg/dL)</label><input type="number" id="phos_w3" step="0.1" placeholder="e.g. 3.4" /></div>
+            </div>
+          </div>
+          <div id="min-w6" class="tab-panel">
+            <div class="form-row">
+              <div class="form-group"><label>Calcium (mg/dL)</label><input type="number" id="ca_w6" step="0.1" placeholder="e.g. 9.6" /></div>
+              <div class="form-group"><label>Phosphorus (mg/dL)</label><input type="number" id="phos_w6" step="0.1" placeholder="e.g. 3.6" /></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Radiological Callus -->
+        <div class="form-section">
+          <div class="form-section-title">Radiological Callus (mm²)</div>
+          <div class="form-row cols-3">
+            <div class="form-group"><label>Day 1</label><input type="number" id="callus_d1" step="0.1" placeholder="e.g. 20" /></div>
+            <div class="form-group"><label>Week 3</label><input type="number" id="callus_w3" step="0.1" placeholder="e.g. 80" /></div>
+            <div class="form-group"><label>Week 6</label><input type="number" id="callus_w6" step="0.1" placeholder="e.g. 190" /></div>
+          </div>
+        </div>
+
+        <button type="submit" class="submit-btn" id="submit-btn">
+          <span id="btn-text">Predict Healing</span>
+          <span id="btn-spinner" class="spinner" style="display:none"></span>
+        </button>
+
+        <div id="form-error" style="display:none;margin-top:12px;padding:10px 14px;background:#fee2e2;border-radius:8px;font-size:0.85rem;color:#991b1b;"></div>
+
+      </form>
+    </div>
+  </div>
+
+  <!-- ──────────── RIGHT: RESULTS ──────────── -->
+  <div class="results-panel" id="results-panel">
+
+    <!-- Empty state -->
+    <div class="empty-state" id="empty-state">
+      <div class="empty-icon">🩻</div>
+      <h3>No Prediction Yet</h3>
+      <p style="margin-top:8px">Fill in the patient data on the left and click <strong>Predict Healing</strong>.</p>
+    </div>
+
+    <!-- Result cards (hidden until response) -->
+    <div id="result-cards" style="display:none">
+
+      <!-- Card 1: Probability + Category -->
+      <div class="result-card">
+        <div class="result-card-title">Healing Prediction</div>
+        <div class="gauge-wrap">
+          <div class="gauge-svg-wrap">
+            <svg class="gauge-svg" width="160" height="160" viewBox="0 0 160 160">
+              <circle class="gauge-bg"  cx="80" cy="80" r="64" />
+              <circle class="gauge-arc" cx="80" cy="80" r="64" id="gauge-arc"
+                stroke-dasharray="0 402" stroke="#22c55e" />
+            </svg>
+            <div class="gauge-label">
+              <span class="gauge-pct" id="gauge-pct">—</span>
+              <span class="gauge-sub">healing</span>
+            </div>
+          </div>
+          <div class="gauge-info">
+            <span class="category-badge" id="category-badge">—</span>
+            <p id="probability-text" style="font-size:0.9rem;color:var(--text);margin-bottom:16px"></p>
+            <div class="model-scores" id="model-scores"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 2: Biomarker trend charts -->
+      <div class="result-card">
+        <div class="result-card-title">Biomarker Trends</div>
+        <div class="charts-grid">
+          <div class="chart-box"><canvas id="chart-bsap"></canvas></div>
+          <div class="chart-box"><canvas id="chart-alp"></canvas></div>
+          <div class="chart-box"><canvas id="chart-p1np"></canvas></div>
+          <div class="chart-box"><canvas id="chart-callus"></canvas></div>
+        </div>
+        <p id="trend-summary" style="margin-top:14px;font-size:0.88rem;color:var(--text-muted);"></p>
+      </div>
+
+      <!-- Card 3: Similar cases -->
+      <div class="result-card">
+        <div class="result-card-title">Similar Historical Cases</div>
+        <table class="cases-table">
+          <thead>
+            <tr>
+              <th>Name</th><th>Phone</th><th>Age</th><th>Gender</th>
+              <th>Location</th><th>Callus W6</th><th>Outcome</th><th>Similarity</th>
+            </tr>
+          </thead>
+          <tbody id="cases-tbody"></tbody>
+        </table>
+      </div>
+
+      <!-- Card 4: Clinical explanation -->
+      <div class="result-card">
+        <div class="result-card-title">AI Clinical Explanation (GPT-4o)</div>
+        <p class="explanation-text" id="explanation-text"></p>
+      </div>
+
+      <!-- Card 5: Risk flags + recommendations -->
+      <div class="result-card">
+        <div class="result-card-title">Risk Flags &amp; Recommendations</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div>
+            <p style="font-size:0.8rem;font-weight:700;color:var(--moderate);text-transform:uppercase;margin-bottom:10px">Risk Flags</p>
+            <div class="flags-list" id="flags-list"></div>
+          </div>
+          <div>
+            <p style="font-size:0.8rem;font-weight:700;color:var(--good);text-transform:uppercase;margin-bottom:10px">Recommendations</p>
+            <div class="flags-list" id="recs-list"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

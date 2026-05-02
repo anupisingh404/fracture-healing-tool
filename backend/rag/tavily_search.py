@@ -1,6 +1,7 @@
 from __future__ import annotations
 import logging
-import os
+
+from backend.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +17,7 @@ def search_medical_literature(
     Returns a list of text snippets to inject into the GPT-4o prompt.
     Falls back to empty list if TAVILY_API_KEY is not set.
     """
-    api_key = os.environ.get("TAVILY_API_KEY", "")
+    api_key = settings.tavily_api_key
     if not api_key:
         logger.warning("TAVILY_API_KEY not set — skipping web search.")
         return []

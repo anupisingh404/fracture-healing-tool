@@ -39,6 +39,8 @@ class MineralSet(BaseModel):
 
 
 class PatientInput(BaseModel):
+    patient_name: Optional[str] = Field(None, description="Patient full name")
+    phone_no: Optional[str] = Field(None, description="Patient phone number")
     age: int = Field(..., ge=0, le=120)
     gender: Gender
     fracture_location: FractureLocation

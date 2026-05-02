@@ -69,6 +69,8 @@ function collectFormData() {
   const gender = document.querySelector('input[name="gender"]:checked')?.value || "male";
 
   return {
+    patient_name: document.getElementById("patient_name").value.trim(),
+    phone_no: document.getElementById("phone_no").value.trim(),
     age,
     gender,
     fracture_location: document.getElementById("fracture_location").value,

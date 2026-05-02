@@ -1,7 +1,7 @@
 from __future__ import annotations
 import logging
-import os
 
+from backend.config import settings
 from backend.schemas.patient import PatientInput, BiomarkerTrends, SimilarCase
 
 logger = logging.getLogger(__name__)
@@ -22,7 +22,7 @@ async def generate_clinical_explanation(
     similar_cases: list[SimilarCase],
     literature_snippets: list[str] | None = None,
 ) -> str:
-    api_key = os.environ.get("OPENAI_API_KEY", "")
+    api_key = settings.openai_api_key
     if not api_key:
         logger.warning("OPENAI_API_KEY not set — returning placeholder explanation.")
         return _fallback_explanation(patient, inference_result, trends)

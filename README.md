@@ -12,9 +12,10 @@ An intelligent clinical web platform that predicts fracture healing outcomes usi
 4. [Project Structure](#project-structure)
 5. [Setup](#setup)
 6. [How It Works — Flow](#how-it-works--flow)
-7. [API Reference](#api-reference)
-8. [MCP Integration (Claude Desktop)](#mcp-integration-claude-desktop)
-9. [Dataset](#dataset)
+7. [Continuous Learning — Auto-Save & Auto-Retrain](#continuous-learning--auto-save--auto-retrain)
+8. [API Reference](#api-reference)
+9. [MCP Integration (Claude Desktop)](#mcp-integration-claude-desktop)
+10. [Dataset](#dataset)
 
 ---
 
@@ -40,6 +41,8 @@ Fracture healing is currently monitored through X-rays and clinical symptoms —
 - **Retrieves 3 similar historical patients** from a ChromaDB vector store using semantic similarity on biomarker summaries
 - **Searches medical literature** via Tavily to find relevant research for the patient's fracture type and biomarker pattern
 - **Generates a GPT-4o clinical narrative** grounded in ML results, biomarker trends, similar cases, and live literature
+- **Auto-saves every prediction** to ChromaDB and `sample_patients.csv` — the system learns from every new patient
+- **Auto-retrains ML models** in the background every 10 new patients — accuracy improves over time without any manual step
 - **Exposes all tools via MCP** (Model Context Protocol) so Claude Desktop can call them directly for agentic clinical workflows
 - **Visualises biomarker trends** across Day 1 → Week 3 → Week 6 as interactive Chart.js line charts
 
@@ -60,20 +63,29 @@ Browser (HTML/CSS/JS)
         │
         │  HTTP
         ▼
-┌─────────────────────────────────────┐
-│           FastAPI Backend           │
-│                                     │
-│  /api/v1/prediction/predict  ──────►│── ML Pipeline (5 models, .pkl)
-│  /api/v1/rag/similar-cases   ──────►│── ChromaDB (30 real patients)
-│  /api/v1/rag/stats                  │
-│  /mcp/call                   ──────►│── MCP Tool Dispatcher
-│  /                           ──────►│── Static Frontend Files
-└─────────────────────────────────────┘
-        │                │
+┌──────────────────────────────────────────┐
+│             FastAPI Backend              │
+│                                          │
+│  POST /api/v1/prediction/predict  ──────►│── ML Pipeline (5 models, .pkl)
+│  POST /api/v1/prediction/retrain  ──────►│── Retrain models from updated CSV
+│  POST /api/v1/rag/similar-cases   ──────►│── ChromaDB (grows with every patient)
+│  GET  /api/v1/prediction/models   ──────►│── Model scores & CV results
+│  /mcp/call                        ──────►│── MCP Tool Dispatcher
+│  /                                ──────►│── Static Frontend Files
+└──────────────────────────────────────────┘
         │                │
         ▼                ▼
    OpenAI GPT-4o    Tavily Search
   (clinical narrative) (medical literature)
+
+        │  After every prediction:
+        ▼
+  sample_patients.csv  ←── new patient row appended
+  ChromaDB             ←── new patient embedding stored
+        │
+        │  Every 10 new patients (background thread):
+        ▼
+  Models retrained → saved_models/*.pkl updated
 ```
 
 ### Component Breakdown
@@ -97,53 +109,63 @@ Browser (HTML/CSS/JS)
 fracture-healing-tool/
 │
 ├── backend/
-│   ├── main.py                    # FastAPI app entry point, lifespan startup
-│   ├── config.py                  # Pydantic settings (reads .env)
+│   ├── main.py                    # FastAPI app entry point; sets ANONYMIZED_TELEMETRY
+│   │                              #   before chromadb import to suppress telemetry errors
+│   ├── config.py                  # Pydantic settings (reads .env into settings object)
 │   │
 │   ├── schemas/
-│   │   └── patient.py             # All Pydantic models: PatientInput, PredictionResult,
-│   │                              #   BiomarkerTrends, SimilarCase, HealingCategory
+│   │   └── patient.py             # All Pydantic models: PatientInput (includes patient_name,
+│   │                              #   phone_no), PredictionResult, BiomarkerTrends,
+│   │                              #   SimilarCase, HealingCategory
 │   │
 │   ├── ml/
 │   │   ├── pipeline.py            # featurize() → 32-dim vector, compute_trends(),
-│   │   │                          #   classify_category(), risk flags, recommendations
+│   │   │                          #   classify_category(), risk flags, recommendations,
+│   │   │                          #   save_patient_to_csv(), retrain()
 │   │   ├── trainer.py             # Trains all 5 models with StratifiedKFold CV, saves .pkl
 │   │   ├── inference.py           # run_inference() → per-model probabilities + ensemble
 │   │   └── saved_models/          # Persisted .pkl files (scaler + 5 models + cv_scores)
 │   │
 │   ├── rag/
 │   │   ├── embedder.py            # Loads MiniLM, embed_patient(), embed_text()
-│   │   ├── vector_store.py        # ChromaDB client, initialize(), add_case(),
-│   │   │                          #   query_cases(), seeds real_patients.csv on first run
+│   │   ├── vector_store.py        # ChromaDB client, initialize(), add_case() (stores
+│   │   │                          #   patient_name + phone_no), query_cases(),
+│   │   │                          #   seeds real_patients.csv on first run
 │   │   ├── retriever.py           # retrieve_similar_cases() → list[SimilarCase]
-│   │   ├── tavily_search.py       # search_medical_literature() via Tavily API
-│   │   └── llm_explainer.py       # GPT-4o clinical narrative, fallback if no API key
+│   │   ├── tavily_search.py       # search_medical_literature() — uses settings.tavily_api_key
+│   │   └── llm_explainer.py       # GPT-4o clinical narrative — uses settings.openai_api_key,
+│   │                              #   fallback if no key
 │   │
 │   ├── mcp_server/
 │   │   ├── server.py              # MCP JSON-RPC 2.0 router (/mcp/manifest, /mcp/call)
 │   │   └── tools.py               # 4 MCP tool handlers + dispatch()
 │   │
 │   ├── routers/
-│   │   ├── prediction.py          # POST /predict, /biomarker-trends, GET /models
+│   │   ├── prediction.py          # POST /predict (auto-save + auto-retrain every 10),
+│   │   │                          #   POST /retrain (manual), POST /biomarker-trends,
+│   │   │                          #   GET /models
 │   │   ├── rag.py                 # POST /similar-cases, /ingest-case, GET /stats
 │   │   └── mcp.py                 # Re-exports MCP server router
 │   │
 │   └── requirements.txt
 │
 ├── frontend/
-│   ├── index.html                 # Landing page (7 sections describing the platform)
-│   ├── dashboard.html             # Doctor input form + full results panel
+│   ├── index.html                 # Landing page
+│   ├── dashboard.html             # Doctor input form (Full Name, Phone Number, Age,
+│   │                              #   Gender, Fracture Location, biomarkers) + results panel
 │   ├── style.css                  # Design system: CSS variables, cards, gauge, charts
-│   └── app.js                     # Form collection, fetch, Chart.js rendering, gauge SVG
+│   └── app.js                     # Form collection (includes patient_name, phone_no),
+│                                  #   fetch, Chart.js rendering, gauge SVG
 │
 ├── data/
-│   ├── real_patients.csv          # 30 real de-identified patients (used for ChromaDB)
-│   ├── sample_patients.csv        # 500 synthetic patients (used to train ML models)
-│   └── generate_synthetic.py      # Script to regenerate synthetic training data
+│   ├── real_patients.csv          # 30 real de-identified patients (used for ChromaDB seeding)
+│   ├── sample_patients.csv        # Synthetic + accumulated real patients (ML training data)
+│   │                              #   — grows automatically as new patients are predicted
+│   └── generate_synthetic.py      # Script to regenerate base synthetic training data
 │
-├── chroma_db/                     # ChromaDB persistent store (auto-created on first run)
+├── chroma_db/                     # ChromaDB persistent store (grows with every prediction)
 │
-├── .env.example                   # Template for environment variables
+├── .env                           # All environment variables (API keys, paths, ML config)
 └── README.md
 ```
 
@@ -156,50 +178,76 @@ fracture-healing-tool/
 - Python 3.11 or 3.12
 - pip
 
-### 1. Clone / navigate to the project
+### 1. Clone the repository
 
 ```bash
+git clone git@github.com:anupisingh404/fracture-healing-tool.git
 cd fracture-healing-tool
 ```
 
-### 2. Install dependencies
-
-```bash
-pip install -r backend/requirements.txt
-```
-
-If your system blocks pip (PEP 668), add `--break-system-packages` or use a virtual environment:
+### 2. Create and activate a virtual environment
 
 ```bash
 python3 -m venv venv
 source venv/bin/activate
+```
+
+### 3. Install dependencies
+
+```bash
 pip install -r backend/requirements.txt
 ```
 
-### 3. Configure API keys
+### 4. Configure environment variables
 
-```bash
-cp .env.example .env
-```
-
-Edit `.env`:
+Create a `.env` file in the project root with all the variables below:
 
 ```env
-OPENAI_API_KEY=sk-...        # Required for GPT-4o clinical explanations
-TAVILY_API_KEY=tvly-...      # Required for medical literature search
+# ── External API Keys ─────────────────────────────────────────────────────────
+OPENAI_API_KEY=sk-...          # Required for GPT-4o clinical explanations
+TAVILY_API_KEY=tvly-...        # Required for medical literature search
+
+# ── ChromaDB ──────────────────────────────────────────────────────────────────
+CHROMA_PERSIST_DIR=./chroma_db          # Where ChromaDB stores its data
+ANONYMIZED_TELEMETRY=false              # Suppresses ChromaDB posthog telemetry errors
+
+# ── ML Pipeline ───────────────────────────────────────────────────────────────
+MODEL_SAVE_DIR=./backend/ml/saved_models  # Where trained .pkl files are saved
+BEST_ML_MODEL=XGBoost                     # Starting best model (updated after each retrain)
+RETRAIN_EVERY_N=10                        # Auto-retrain after every N new patients
+
+# ── Embeddings ────────────────────────────────────────────────────────────────
+EMBED_MODEL=sentence-transformers/all-MiniLM-L6-v2   # Local embedding model for ChromaDB
+
+# ── Logging ───────────────────────────────────────────────────────────────────
+LOG_LEVEL=INFO                  # Options: DEBUG, INFO, WARNING, ERROR
 ```
 
-> **Without API keys** the system still works — ML prediction, biomarker trends, and similar case retrieval all function. Only the clinical explanation falls back to a rule-based summary.
+**Variable reference:**
 
-### 4. Generate synthetic training data (first time only)
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `OPENAI_API_KEY` | No | `""` | GPT-4o clinical explanation. Falls back to rule-based summary if not set |
+| `TAVILY_API_KEY` | No | `""` | Medical literature search. Skipped gracefully if not set |
+| `CHROMA_PERSIST_DIR` | No | `./chroma_db` | ChromaDB persistent storage directory |
+| `ANONYMIZED_TELEMETRY` | No | `false` | Set to `false` to suppress ChromaDB posthog errors |
+| `MODEL_SAVE_DIR` | No | `./backend/ml/saved_models` | Directory for trained `.pkl` model files |
+| `BEST_ML_MODEL` | No | `XGBoost` | Initial best model name (overridden after retraining) |
+| `RETRAIN_EVERY_N` | No | `10` | Number of new patients that triggers a background auto-retrain |
+| `EMBED_MODEL` | No | `sentence-transformers/all-MiniLM-L6-v2` | HuggingFace model for patient embeddings |
+| `LOG_LEVEL` | No | `INFO` | Python logging level |
+
+> **Minimum setup:** only `OPENAI_API_KEY` and `TAVILY_API_KEY` need to be changed — all other variables have sensible defaults.
+
+### 5. Generate synthetic training data (first time only)
 
 ```bash
 python3 data/generate_synthetic.py
 ```
 
-This writes `data/sample_patients.csv` (500 rows) used to train the ML models.
+This writes `data/sample_patients.csv` (1000+ rows) used to train the ML models.
 
-### 5. Train the ML models (first time only)
+### 6. Train the ML models (first time only)
 
 ```bash
 PYTHONPATH=. python3 -m backend.ml.trainer
@@ -216,17 +264,17 @@ GradientBoosting:   CV f1_macro = 0.9451
 Best model: SVM (0.9664)
 ```
 
-> Steps 4 and 5 only need to be run once. On subsequent starts, the server loads the saved `.pkl` files directly.
+> Steps 5 and 6 only need to be run once. On subsequent starts the server loads the saved `.pkl` files directly. After enough real patients accumulate, auto-retrain replaces the synthetic-only models with models trained on real data.
 
-### 6. Start the server
+### 7. Start the server
 
 ```bash
 PYTHONPATH=. uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-On first startup, ChromaDB is automatically seeded with all 30 real patients from `data/real_patients.csv` and 10 medical literature chunks. This takes ~30 seconds.
+On first startup, ChromaDB is automatically seeded with all 30 real patients from `data/real_patients.csv` and 10 medical literature chunks (~30 seconds).
 
-### 7. Open in browser
+### 8. Open in browser
 
 | URL | Page |
 |---|---|
@@ -242,6 +290,9 @@ On first startup, ChromaDB is automatically seeded with all 30 real patients fro
 
 ```
 Doctor fills form on dashboard.html
+  Fields: Full Name, Phone Number, Age, Gender, Fracture Location,
+          Biomarkers (BSAP/ALP/P1NP × 3 timepoints),
+          Minerals (Ca/Phos × 3 timepoints), Callus (× 3 timepoints)
         │
         │  POST /api/v1/prediction/predict  (JSON: PatientInput)
         ▼
@@ -260,8 +311,7 @@ Doctor fills form on dashboard.html
 │    bsap_delta, alp_delta, p1np_delta (day1→week6)       │
 │    ca_delta, phos_delta                                 │
 │    callus_d1_w3, callus_w3_w6, callus_d1_w6            │
-│    bsap_alp_ratio_w6                                    │
-│    ca_phos_product_w6                                   │
+│    bsap_alp_ratio_w6, ca_phos_product_w6                │
 │    callus_growth_rate (mm²/day)                         │
 └─────────────────────────────────────────────────────────┘
         │
@@ -270,92 +320,65 @@ Doctor fills form on dashboard.html
 │  Step 2: ML Inference  (inference.py)                   │
 │                                                         │
 │  feature_vector → StandardScaler → 5 classifiers        │
-│                                                         │
-│  Each model returns P(Poor), P(Moderate), P(Good)       │
-│  Best model (SVM by CV score) chosen as primary result  │
-│  Weighted ensemble across all 5 models also computed    │
+│  Each returns P(Poor), P(Moderate), P(Good)             │
+│  Best model (highest CV score) → primary result         │
 │                                                         │
 │  Output:                                                │
 │    healing_probability = P(Good) from best model        │
-│    predicted_category  = argmax of best model proba     │
-│    all_model_scores    = {model: P(Good), ...}          │
+│    predicted_category  = argmax of best model           │
+│    all_model_scores    = { model: P(Good), ... }        │
 └─────────────────────────────────────────────────────────┘
         │
         ▼
 ┌─────────────────────────────────────────────────────────┐
 │  Step 3: Trend Analysis  (pipeline.py)                  │
 │                                                         │
-│  For each marker, compute:                              │
-│    trend list: [day1, week3, week6]                     │
-│    delta_pct:  % change from day1 to week6              │
-│                                                         │
-│  Rule-based trend narrative:                            │
-│    "BSAP rising (+34%), suggesting active bone          │
-│     formation; callus growing well (+847%)"             │
-│                                                         │
-│  Risk flags (rule-based, not ML):                       │
-│    BSAP declining → reduced osteoblast activity         │
-│    Callus growth < 20% → risk of delayed union          │
-│    P1NP trend negative → impaired collagen synthesis    │
+│  Per marker: trend list [d1, w3, w6] + delta_pct        │
+│  Rule-based narrative + risk flags + recommendations     │
 └─────────────────────────────────────────────────────────┘
         │
         ▼
 ┌─────────────────────────────────────────────────────────┐
 │  Step 4: RAG — Similar Case Retrieval  (retriever.py)   │
 │                                                         │
-│  1. Convert patient to natural-language summary text    │
-│     "41yo male with tibia fracture. BSAP day1=23..."   │
-│                                                         │
-│  2. Embed with MiniLM-L6-v2 → 384-dim vector           │
-│                                                         │
-│  3. Cosine similarity search in ChromaDB                │
-│     (30 real patients stored as embeddings)             │
-│                                                         │
-│  4. Return top-3 most similar cases with:              │
-│     patient_name, phone_no, age, gender,                │
-│     fracture_location, callus_w6, outcome,              │
-│     similarity_score                                    │
+│  Patient → MiniLM-L6-v2 → 384-dim vector                │
+│  Cosine similarity search in ChromaDB                   │
+│  Returns top-3 most similar cases with:                 │
+│    patient_name, phone_no, age, gender,                 │
+│    fracture_location, callus_w6, outcome, similarity%   │
 └─────────────────────────────────────────────────────────┘
         │
         ▼
 ┌─────────────────────────────────────────────────────────┐
 │  Step 5: Tavily Web Search  (tavily_search.py)          │
 │                                                         │
-│  Query: "{fracture_location} fracture healing           │
-│          prognosis BSAP ALP P1NP callus {category}"    │
-│                                                         │
-│  Returns 3–5 snippets from medical journals/databases   │
-│  (skipped gracefully if TAVILY_API_KEY not set)         │
+│  Uses settings.tavily_api_key (loaded from .env)        │
+│  Returns 3–5 medical literature snippets                │
+│  Skipped gracefully if TAVILY_API_KEY not set           │
 └─────────────────────────────────────────────────────────┘
         │
         ▼
 ┌─────────────────────────────────────────────────────────┐
 │  Step 6: GPT-4o Clinical Explanation  (llm_explainer)   │
 │                                                         │
-│  Prompt contains:                                       │
-│    • Patient demographics + biomarker values            │
-│    • ML probabilities from all 5 models                 │
-│    • Biomarker trend summary (% changes)                │
-│    • 3 similar historical cases                         │
-│    • Tavily literature snippets                         │
-│                                                         │
+│  Uses settings.openai_api_key (loaded from .env)        │
+│  Prompt: patient data + ML scores + trends +            │
+│          similar cases + literature snippets            │
 │  Output: 3–4 paragraph clinical narrative               │
-│  (framed as "prediction", not diagnosis)                │
-│                                                         │
 │  Fallback: rule-based summary if no OPENAI_API_KEY      │
 └─────────────────────────────────────────────────────────┘
         │
         ▼
 ┌─────────────────────────────────────────────────────────┐
-│  Step 7: Response Assembly  (prediction.py router)      │
+│  Step 7: Auto-Save  (prediction.py router)              │
 │                                                         │
-│  PredictionResult {                                     │
-│    healing_probability,  healing_probability_pct,       │
-│    healing_category,     model_used,                    │
-│    confidence_scores,    biomarker_trends,              │
-│    similar_cases,        clinical_explanation,          │
-│    risk_flags,           recommendations                │
-│  }                                                      │
+│  → ChromaDB: patient embedding stored for future        │
+│              similar-case retrieval                     │
+│  → sample_patients.csv: patient row appended for        │
+│              future ML retraining                       │
+│                                                         │
+│  new_patient_count += 1                                 │
+│  If count % 10 == 0 → trigger background retrain        │
 └─────────────────────────────────────────────────────────┘
         │
         ▼
@@ -369,10 +392,12 @@ Dashboard renders:
   • Risk flags + recommendations
 ```
 
-### Startup Flow (server boot)
+### Startup Flow
 
 ```
 uvicorn backend.main:app
+        │
+        ├── os.environ["ANONYMIZED_TELEMETRY"] = "false"   ← must be before chromadb import
         │
         ├── Load ML Pipeline
         │     • Check backend/ml/saved_models/ for .pkl files
@@ -381,38 +406,74 @@ uvicorn backend.main:app
         │
         ├── Initialise Vector Store
         │     • Connect to ChromaDB at ./chroma_db/
-        │     • If patient_cases collection is empty:
-        │         Read data/real_patients.csv (30 patients)
-        │         Embed each patient summary with MiniLM
-        │         Store in ChromaDB
-        │     • If literature collection is empty:
-        │         Embed 10 medical knowledge chunks
-        │         Store in ChromaDB
+        │     • If patient_cases empty → seed 30 real patients
+        │     • If literature empty → seed 10 knowledge chunks
         │
         └── Server ready → http://0.0.0.0:8000
 ```
 
-### ChromaDB Seeding Flow (first run only)
+---
+
+## Continuous Learning — Auto-Save & Auto-Retrain
+
+Every patient prediction automatically improves the system for future predictions:
+
+### What gets saved on every prediction
+
+| Store | What is saved | Benefit |
+|---|---|---|
+| `ChromaDB` | Patient embedding + metadata (name, phone, biomarkers, outcome) | Better "Similar Historical Cases" matches |
+| `sample_patients.csv` | Full patient row with all biomarker values + predicted outcome | Grows the ML training dataset |
+
+### Auto-retrain trigger
 
 ```
-data/real_patients.csv (30 rows)
-        │
-        ▼
-For each patient row:
-  Build summary text:
-    "Patient: Satya Prakash Singh (Phone: 9718184829).
-     41yo male with tibia fracture.
-     BSAP day1=23.1→week6=34.7. ALP day1=59.6→week6=142.3.
-     Callus week6=125. Outcome: Moderate."
-        │
-        ▼
-  MiniLM-L6-v2 encodes summary → 384-dim float vector
-        │
-        ▼
-  ChromaDB stores: { id, embedding, metadata, document }
-        │
-        ▼
-30 cases stored. Cosine similarity search ready.
+Patient 1  → saved → new_patient_count = 1
+Patient 2  → saved → new_patient_count = 2
+...
+Patient 10 → saved → new_patient_count = 10
+                           │
+              ┌────────────▼────────────┐
+              │  Background retrain     │
+              │  (asyncio thread pool)  │
+              │                         │
+              │  Read full CSV          │
+              │  Retrain 5 models       │
+              │  Save new .pkl files    │
+              │  new_patient_count = 0  │
+              └─────────────────────────┘
+
+Patient 11 → count resets to 1, cycle begins again
+```
+
+- Retraining runs **in the background** — the user receives their prediction result immediately
+- You can see it in server logs: `Auto-retrain triggered after 10 new patients (1010 total rows)`
+- Retrain threshold is configurable: change `RETRAIN_EVERY_N = 10` in `backend/routers/prediction.py`
+
+### What improves over time
+
+| What | How it improves |
+|---|---|
+| Similar case retrieval | More real patients in ChromaDB → closer, more relevant matches |
+| GPT-4o explanation | Better similar cases → richer context → more accurate narrative |
+| ML prediction accuracy | More real patient rows in CSV → models trained on real-world data, not just synthetic |
+
+### Manual retrain
+
+Trigger a retrain at any time without waiting for 10 new patients:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/prediction/retrain
+```
+
+Response:
+```json
+{
+  "status": "retrained",
+  "training_rows": 1042,
+  "cv_scores": { "XGBoost": 0.961, "SVM": 0.974, ... },
+  "best_model": "SVM"
+}
 ```
 
 ---
@@ -424,6 +485,7 @@ For each patient row:
 | Method | Endpoint | Description |
 |---|---|---|
 | POST | `/api/v1/prediction/predict` | Full pipeline — returns `PredictionResult` |
+| POST | `/api/v1/prediction/retrain` | Retrain all ML models from current CSV |
 | POST | `/api/v1/prediction/biomarker-trends` | Trend analysis only (no LLM, fast) |
 | GET | `/api/v1/prediction/models` | Lists models and CV scores |
 
@@ -431,6 +493,8 @@ For each patient row:
 
 ```json
 {
+  "patient_name": "John Smith",
+  "phone_no": "+1 555 0123",
   "age": 41,
   "gender": "male",
   "fracture_location": "tibia",
@@ -446,6 +510,8 @@ For each patient row:
 }
 ```
 
+> `patient_name` and `phone_no` are optional — predictions work without them.
+
 Valid `fracture_location` values: `femur`, `tibia`, `radius`, `ulna`, `humerus`, `fibula`, `pelvis`, `vertebra`
 
 ### RAG
@@ -453,7 +519,7 @@ Valid `fracture_location` values: `femur`, `tibia`, `radius`, `ulna`, `humerus`,
 | Method | Endpoint | Description |
 |---|---|---|
 | POST | `/api/v1/rag/similar-cases` | Returns top-3 similar patients from ChromaDB |
-| POST | `/api/v1/rag/ingest-case` | Adds a new case to the vector store |
+| POST | `/api/v1/rag/ingest-case` | Manually adds a case to the vector store |
 | GET | `/api/v1/rag/stats` | Returns `{ total_cases, literature_chunks }` |
 
 ### MCP
@@ -504,18 +570,30 @@ Claude will invoke `predict_fracture_healing`, chain it with `explain_prediction
 - **30 patients** from actual clinical records
 - Fracture types: Tibia (12), Femur (8), Humerus (5), Ulna (3), Radius (2)
 - Gender: Male (21), Female (9)
-- All patients healed to Moderate or Good category (no Poor cases in this cohort)
-- Used exclusively for ChromaDB similar-case retrieval (RAG)
+- Used exclusively for initial ChromaDB seeding (RAG)
 - Contains: `patient_name`, `phone_no`, `age`, `gender`, `fracture_location`, full biomarker panel, `healing_category`
 
-### Synthetic Data (`data/sample_patients.csv`)
+### Training Data (`data/sample_patients.csv`)
 
-- **500 patients** generated with realistic statistical distributions
-- Distribution: Good (200), Moderate (175), Poor (125)
-- Used only for ML model training — not shown to users
-- Includes Poor category cases (absent in real data) to give models exposure to all three classes
-- Regenerate anytime: `python3 data/generate_synthetic.py`
+- **Starts with 1000+ synthetic patients** generated with realistic statistical distributions
+- **Grows automatically** — every new patient prediction appends a row here
+- Distribution (synthetic base): Good (400), Moderate (350), Poor (250)
+- Includes Poor category cases to give models exposure to all three classes
+- Regenerate base synthetic data: `python3 data/generate_synthetic.py`
 
 ### Why Two Datasets?
 
-The real dataset has only 30 patients — too few for reliable 5-fold cross-validation (only 6 samples per fold). Synthetic data augments this for training while the real data provides authentic case context for RAG retrieval.
+The real dataset has only 30 patients — too few for reliable 5-fold cross-validation (only 6 samples per fold). Synthetic data provides the base for initial training. As real patient data accumulates via the auto-save mechanism, the models progressively retrain on real-world distributions, improving accuracy over time.
+
+### Data Flow Summary
+
+```
+First run:
+  data/real_patients.csv (30)  ──► ChromaDB (seeded once)
+  data/sample_patients.csv     ──► ML models trained
+
+Ongoing (every prediction):
+  New patient ──► ChromaDB (appended)
+  New patient ──► sample_patients.csv (appended)
+               └─► Every 10 patients: models retrained from full CSV
+```

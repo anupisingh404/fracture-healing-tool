@@ -152,6 +152,36 @@ class MLPipeline:
             joblib.dump(model, os.path.join(MODEL_SAVE_DIR, f"{name}.pkl"))
         logger.info("Models saved to disk.")
 
+    def save_patient_to_csv(self, patient: PatientInput, outcome: HealingCategory) -> None:
+        p = patient
+        import uuid as _uuid
+        pid = f"P{_uuid.uuid4().hex[:6].upper()}_{outcome.value}"
+        row = {
+            "patient_id": pid,
+            "age": p.age,
+            "gender": p.gender.value,
+            "fracture_location": p.fracture_location.value,
+            "bsap_d1": p.biomarkers_day1.bsap,   "alp_d1": p.biomarkers_day1.alp,   "p1np_d1": p.biomarkers_day1.p1np,
+            "bsap_w3": p.biomarkers_week3.bsap,  "alp_w3": p.biomarkers_week3.alp,  "p1np_w3": p.biomarkers_week3.p1np,
+            "bsap_w6": p.biomarkers_week6.bsap,  "alp_w6": p.biomarkers_week6.alp,  "p1np_w6": p.biomarkers_week6.p1np,
+            "ca_d1": p.minerals_day1.calcium,     "phos_d1": p.minerals_day1.phosphorus,
+            "ca_w3": p.minerals_week3.calcium,    "phos_w3": p.minerals_week3.phosphorus,
+            "ca_w6": p.minerals_week6.calcium,    "phos_w6": p.minerals_week6.phosphorus,
+            "callus_d1": p.callus_d1, "callus_w3": p.callus_w3, "callus_w6": p.callus_w6,
+            "healing_category": outcome.value,
+        }
+        csv_path = os.path.abspath(DATA_PATH)
+        write_header = not os.path.exists(csv_path)
+        df_row = pd.DataFrame([row])
+        df_row.to_csv(csv_path, mode="a", header=write_header, index=False)
+        logger.info(f"Saved new patient {pid} to training CSV.")
+
+    def retrain(self) -> dict:
+        logger.info("Retraining models from updated CSV …")
+        self._train_from_csv()
+        logger.info("Retraining complete.")
+        return self.cv_scores
+
 
 # ------------------------------------------------------------------
 # Trend computation

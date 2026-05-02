@@ -1,6 +1,11 @@
 from __future__ import annotations
+import os
 import logging
 from contextlib import asynccontextmanager
+
+# Must be set before chromadb is imported to suppress posthog telemetry errors
+from backend.config import settings
+os.environ["ANONYMIZED_TELEMETRY"] = settings.anonymized_telemetry
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware

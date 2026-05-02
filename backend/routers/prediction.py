@@ -1,20 +1,29 @@
 from __future__ import annotations
+import asyncio
+import logging
+import os
+import pandas as pd
+
 from fastapi import APIRouter, Request, HTTPException
 from backend.schemas.patient import PatientInput, PredictionResult, BiomarkerTrends
 from backend.ml.pipeline import (
     compute_trends, classify_category,
-    extract_risk_flags, generate_recommendations,
+    extract_risk_flags, generate_recommendations, DATA_PATH,
 )
 from backend.ml.inference import run_inference
 from backend.rag.retriever import retrieve_similar_cases
 from backend.rag.llm_explainer import generate_clinical_explanation
 from backend.rag.tavily_search import search_medical_literature
+from backend.config import settings
+
+logger = logging.getLogger(__name__)
+
+RETRAIN_EVERY_N = settings.retrain_every_n
 
 router = APIRouter()
 
 
 def get_ml_pipeline(request: Request):
-    """Load ML pipeline with error handling."""
     if not hasattr(request.app.state, 'ml_pipeline'):
         try:
             from backend.ml.pipeline import MLPipeline
@@ -26,7 +35,6 @@ def get_ml_pipeline(request: Request):
 
 
 def get_vector_store(request: Request):
-    """Load vector store with error handling."""
     if not hasattr(request.app.state, 'vector_store'):
         try:
             from backend.rag.vector_store import VectorStore
@@ -36,6 +44,20 @@ def get_vector_store(request: Request):
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to load vector store: {str(e)}")
     return request.app.state.vector_store
+
+
+def _new_patient_count(request: Request) -> int:
+    """Track how many new patients have been saved since last retrain."""
+    if not hasattr(request.app.state, 'new_patient_count'):
+        request.app.state.new_patient_count = 0
+    return request.app.state.new_patient_count
+
+
+async def _retrain_in_background(ml, total_rows: int):
+    """Run retraining in a background thread so it doesn't block the response."""
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, ml.retrain)
+    logger.info(f"Auto-retrain complete — trained on {total_rows} patients.")
 
 
 @router.post("/predict", response_model=PredictionResult)
@@ -53,11 +75,29 @@ async def predict(patient: PatientInput, request: Request):
         trends.trend_summary,
     )
     explanation = await generate_clinical_explanation(patient, inference, trends, similar, lit)
+    healing_cat = classify_category(patient.callus_w6)
+
+    # Save to ChromaDB and CSV
+    try:
+        vs.add_case(patient, healing_cat)
+    except Exception:
+        pass
+    try:
+        ml.save_patient_to_csv(patient, healing_cat)
+        request.app.state.new_patient_count = _new_patient_count(request) + 1
+        count = request.app.state.new_patient_count
+
+        if count % RETRAIN_EVERY_N == 0:
+            total_rows = len(pd.read_csv(os.path.abspath(DATA_PATH)))
+            logger.info(f"Auto-retrain triggered after {count} new patients ({total_rows} total rows).")
+            asyncio.create_task(_retrain_in_background(ml, total_rows))
+    except Exception:
+        pass
 
     return PredictionResult(
         healing_probability=inference["probability"],
         healing_probability_pct=f"{round(inference['probability'] * 100)}% probability of successful healing",
-        healing_category=classify_category(patient.callus_w6),
+        healing_category=healing_cat,
         model_used=inference["best_model"],
         confidence_scores=inference["good_probs"],
         biomarker_trends=trends,
@@ -80,4 +120,18 @@ def list_models(request: Request):
         "models": list(ml.models.keys()),
         "best_model": ml.best_model_name,
         "cv_scores": ml.cv_scores,
+    }
+
+
+@router.post("/retrain")
+def retrain_models(request: Request):
+    ml = get_ml_pipeline(request)
+    row_count = len(pd.read_csv(os.path.abspath(DATA_PATH)))
+    cv_scores = ml.retrain()
+    request.app.state.new_patient_count = 0  # reset counter after manual retrain
+    return {
+        "status": "retrained",
+        "training_rows": row_count,
+        "cv_scores": cv_scores,
+        "best_model": ml.best_model_name,
     }

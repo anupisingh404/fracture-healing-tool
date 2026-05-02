@@ -54,8 +54,11 @@ class VectorStore:
         case_id: str | None = None,
     ) -> str:
         cid = case_id or str(uuid.uuid4())
+        name = getattr(patient, "patient_name", "") or ""
+        phone = getattr(patient, "phone_no", "") or ""
         if summary is None:
             summary = (
+                f"Patient: {name} (Phone: {phone}). "
                 f"{patient.age}yo {patient.gender.value} with "
                 f"{patient.fracture_location.value} fracture. "
                 f"Callus week6={patient.callus_w6:.0f}. Outcome: {outcome.value}."
@@ -70,6 +73,8 @@ class VectorStore:
                 "fracture_location": patient.fracture_location.value,
                 "callus_w6": patient.callus_w6,
                 "outcome": outcome.value,
+                "patient_name": name,
+                "phone_no": phone,
                 "summary": summary,
             }],
             documents=[summary],

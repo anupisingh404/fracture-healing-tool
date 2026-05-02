@@ -24,17 +24,7 @@ FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "../frontend")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Starting up — loading ML pipeline …")
-    ml = MLPipeline()
-    ml.load_or_train()
-    app.state.ml_pipeline = ml
-
-    logger.info("Initialising vector store …")
-    vs = VectorStore()
-    vs.initialize()
-    app.state.vector_store = vs
-
-    logger.info("Ready.")
+    logger.info("Server starting...")
     yield
 
     logger.info("Shutting down.")

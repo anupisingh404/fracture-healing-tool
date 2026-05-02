@@ -1,5 +1,5 @@
 from __future__ import annotations
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, HTTPException
 from backend.schemas.patient import PatientInput, PredictionResult, BiomarkerTrends
 from backend.ml.pipeline import (
     compute_trends, classify_category,
@@ -13,10 +13,35 @@ from backend.rag.tavily_search import search_medical_literature
 router = APIRouter()
 
 
+def get_ml_pipeline(request: Request):
+    """Load ML pipeline with error handling."""
+    if not hasattr(request.app.state, 'ml_pipeline'):
+        try:
+            from backend.ml.pipeline import MLPipeline
+            request.app.state.ml_pipeline = MLPipeline()
+            request.app.state.ml_pipeline.load_or_train()
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to load ML models: {str(e)}")
+    return request.app.state.ml_pipeline
+
+
+def get_vector_store(request: Request):
+    """Load vector store with error handling."""
+    if not hasattr(request.app.state, 'vector_store'):
+        try:
+            from backend.rag.vector_store import VectorStore
+            vs = VectorStore()
+            vs.initialize()
+            request.app.state.vector_store = vs
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to load vector store: {str(e)}")
+    return request.app.state.vector_store
+
+
 @router.post("/predict", response_model=PredictionResult)
 async def predict(patient: PatientInput, request: Request):
-    ml = request.app.state.ml_pipeline
-    vs = request.app.state.vector_store
+    ml = get_ml_pipeline(request)
+    vs = get_vector_store(request)
 
     features, _ = ml.featurize(patient)
     inference = run_inference(ml, features)

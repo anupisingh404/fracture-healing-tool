@@ -38,7 +38,7 @@ class VectorStore:
         if self.literature_col.count() == 0:
             self._seed_literature()
         logger.info(
-            f"VectorStore ready — cases: {self.cases_col.count()}, "
+            f"VectorStore ready -cases: {self.cases_col.count()}, "
             f"literature: {self.literature_col.count()}"
         )
 
@@ -122,7 +122,7 @@ class VectorStore:
 
     def _seed_cases(self):
         if not os.path.exists(REAL_CSV):
-            logger.warning("real_patients.csv not found — skipping case seeding.")
+            logger.warning("real_patients.csv not found -skipping case seeding.")
             return
         df = pd.read_csv(REAL_CSV)  # all 30 real patients
         logger.info(f"Seeding {len(df)} real patient cases into ChromaDB …")

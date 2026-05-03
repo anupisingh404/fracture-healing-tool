@@ -1,4 +1,4 @@
-# FractureAI — AI-Based Early Prediction Tool for Fracture Healing
+# FractureAI -AI-Based Early Prediction Tool for Fracture Healing
 
 An intelligent clinical web platform that predicts fracture healing outcomes using serum biomarkers (BSAP, ALP, P1NP), mineral markers (Calcium, Phosphorus), and radiological callus data measured at Day 1, Week 3, and Week 6 post-fracture.
 
@@ -11,8 +11,8 @@ An intelligent clinical web platform that predicts fracture healing outcomes usi
 3. [Architecture Overview](#architecture-overview)
 4. [Project Structure](#project-structure)
 5. [Setup](#setup)
-6. [How It Works — Flow](#how-it-works--flow)
-7. [Continuous Learning — Auto-Save & Auto-Retrain](#continuous-learning--auto-save--auto-retrain)
+6. [How It Works -Flow](#how-it-works--flow)
+7. [Continuous Learning -Auto-Save & Auto-Retrain](#continuous-learning--auto-save--auto-retrain)
 8. [API Reference](#api-reference)
 9. [MCP Integration (Claude Desktop)](#mcp-integration-claude-desktop)
 10. [Dataset](#dataset)
@@ -21,7 +21,7 @@ An intelligent clinical web platform that predicts fracture healing outcomes usi
 
 ## Why This Tool Exists
 
-Fracture healing is currently monitored through X-rays and clinical symptoms — both of which detect problems **after** the optimal intervention window has closed.
+Fracture healing is currently monitored through X-rays and clinical symptoms -both of which detect problems **after** the optimal intervention window has closed.
 
 | Current Problem | Impact |
 |---|---|
@@ -30,19 +30,19 @@ Fracture healing is currently monitored through X-rays and clinical symptoms —
 | Non-union identified too late | Affects 5–10% of fractures, caught only at 3–6 months |
 | No early prediction tools | Doctors lack actionable data at the critical Week 3 window |
 
-**FractureAI solves this** by feeding routinely collected biomarker data through a 5-model ML ensemble, retrieving similar historical patient cases via RAG, and generating a structured clinical explanation using GPT-4o — all within seconds of entering patient data.
+**FractureAI solves this** by feeding routinely collected biomarker data through a 5-model ML ensemble, retrieving similar historical patient cases via RAG, and generating a structured clinical explanation using GPT-4o -all within seconds of entering patient data.
 
 ---
 
 ## What It Does
 
 - **Predicts healing probability** (e.g. "82% probability of successful healing") and classifies the outcome as **Poor / Moderate / Good** based on Callus_w6 thresholds
-- **Runs 5 ML models in parallel** — Random Forest, XGBoost, Logistic Regression, SVM, Gradient Boosting — and shows all scores
+- **Runs 5 ML models in parallel** -Random Forest, XGBoost, Logistic Regression, SVM, Gradient Boosting -and shows all scores
 - **Retrieves 3 similar historical patients** from a ChromaDB vector store using semantic similarity on biomarker summaries
 - **Searches medical literature** via Tavily to find relevant research for the patient's fracture type and biomarker pattern
 - **Generates a GPT-4o clinical narrative** grounded in ML results, biomarker trends, similar cases, and live literature
-- **Auto-saves every prediction** to ChromaDB and `sample_patients.csv` — the system learns from every new patient
-- **Auto-retrains ML models** in the background every 10 new patients — accuracy improves over time without any manual step
+- **Auto-saves every prediction** to ChromaDB and `sample_patients.csv` -the system learns from every new patient
+- **Auto-retrains ML models** in the background every 10 new patients -accuracy improves over time without any manual step
 - **Exposes all tools via MCP** (Model Context Protocol) so Claude Desktop can call them directly for agentic clinical workflows
 - **Visualises biomarker trends** across Day 1 → Week 3 → Week 6 as interactive Chart.js line charts
 
@@ -132,8 +132,8 @@ fracture-healing-tool/
 │   │   │                          #   patient_name + phone_no), query_cases(),
 │   │   │                          #   seeds real_patients.csv on first run
 │   │   ├── retriever.py           # retrieve_similar_cases() → list[SimilarCase]
-│   │   ├── tavily_search.py       # search_medical_literature() — uses settings.tavily_api_key
-│   │   └── llm_explainer.py       # GPT-4o clinical narrative — uses settings.openai_api_key,
+│   │   ├── tavily_search.py       # search_medical_literature() -uses settings.tavily_api_key
+│   │   └── llm_explainer.py       # GPT-4o clinical narrative -uses settings.openai_api_key,
 │   │                              #   fallback if no key
 │   │
 │   ├── mcp_server/
@@ -160,7 +160,7 @@ fracture-healing-tool/
 ├── data/
 │   ├── real_patients.csv          # 30 real de-identified patients (used for ChromaDB seeding)
 │   ├── sample_patients.csv        # Synthetic + accumulated real patients (ML training data)
-│   │                              #   — grows automatically as new patients are predicted
+│   │                              #   -grows automatically as new patients are predicted
 │   └── generate_synthetic.py      # Script to regenerate base synthetic training data
 │
 ├── chroma_db/                     # ChromaDB persistent store (grows with every prediction)
@@ -237,7 +237,7 @@ LOG_LEVEL=INFO                  # Options: DEBUG, INFO, WARNING, ERROR
 | `EMBED_MODEL` | No | `sentence-transformers/all-MiniLM-L6-v2` | HuggingFace model for patient embeddings |
 | `LOG_LEVEL` | No | `INFO` | Python logging level |
 
-> **Minimum setup:** only `OPENAI_API_KEY` and `TAVILY_API_KEY` need to be changed — all other variables have sensible defaults.
+> **Minimum setup:** only `OPENAI_API_KEY` and `TAVILY_API_KEY` need to be changed -all other variables have sensible defaults.
 
 ### 5. Generate synthetic training data (first time only)
 
@@ -284,7 +284,7 @@ On first startup, ChromaDB is automatically seeded with all 30 real patients fro
 
 ---
 
-## How It Works — Flow
+## How It Works -Flow
 
 ### Full Request Flow (POST /api/v1/prediction/predict)
 
@@ -339,7 +339,7 @@ Doctor fills form on dashboard.html
         │
         ▼
 ┌─────────────────────────────────────────────────────────┐
-│  Step 4: RAG — Similar Case Retrieval  (retriever.py)   │
+│  Step 4: RAG -Similar Case Retrieval  (retriever.py)   │
 │                                                         │
 │  Patient → MiniLM-L6-v2 → 384-dim vector                │
 │  Cosine similarity search in ChromaDB                   │
@@ -414,7 +414,7 @@ uvicorn backend.main:app
 
 ---
 
-## Continuous Learning — Auto-Save & Auto-Retrain
+## Continuous Learning -Auto-Save & Auto-Retrain
 
 Every patient prediction automatically improves the system for future predictions:
 
@@ -446,7 +446,7 @@ Patient 10 → saved → new_patient_count = 10
 Patient 11 → count resets to 1, cycle begins again
 ```
 
-- Retraining runs **in the background** — the user receives their prediction result immediately
+- Retraining runs **in the background** -the user receives their prediction result immediately
 - You can see it in server logs: `Auto-retrain triggered after 10 new patients (1010 total rows)`
 - Retrain threshold is configurable: change `RETRAIN_EVERY_N = 10` in `backend/routers/prediction.py`
 
@@ -484,7 +484,7 @@ Response:
 
 | Method | Endpoint | Description |
 |---|---|---|
-| POST | `/api/v1/prediction/predict` | Full pipeline — returns `PredictionResult` |
+| POST | `/api/v1/prediction/predict` | Full pipeline -returns `PredictionResult` |
 | POST | `/api/v1/prediction/retrain` | Retrain all ML models from current CSV |
 | POST | `/api/v1/prediction/biomarker-trends` | Trend analysis only (no LLM, fast) |
 | GET | `/api/v1/prediction/models` | Lists models and CV scores |
@@ -510,7 +510,7 @@ Response:
 }
 ```
 
-> `patient_name` and `phone_no` are optional — predictions work without them.
+> `patient_name` and `phone_no` are optional -predictions work without them.
 
 Valid `fracture_location` values: `femur`, `tibia`, `radius`, `ulna`, `humerus`, `fibula`, `pelvis`, `vertebra`
 
@@ -576,14 +576,14 @@ Claude will invoke `predict_fracture_healing`, chain it with `explain_prediction
 ### Training Data (`data/sample_patients.csv`)
 
 - **Starts with 1000+ synthetic patients** generated with realistic statistical distributions
-- **Grows automatically** — every new patient prediction appends a row here
+- **Grows automatically** -every new patient prediction appends a row here
 - Distribution (synthetic base): Good (400), Moderate (350), Poor (250)
 - Includes Poor category cases to give models exposure to all three classes
 - Regenerate base synthetic data: `python3 data/generate_synthetic.py`
 
 ### Why Two Datasets?
 
-The real dataset has only 30 patients — too few for reliable 5-fold cross-validation (only 6 samples per fold). Synthetic data provides the base for initial training. As real patient data accumulates via the auto-save mechanism, the models progressively retrain on real-world distributions, improving accuracy over time.
+The real dataset has only 30 patients -too few for reliable 5-fold cross-validation (only 6 samples per fold). Synthetic data provides the base for initial training. As real patient data accumulates via the auto-save mechanism, the models progressively retrain on real-world distributions, improving accuracy over time.
 
 ### Data Flow Summary
 

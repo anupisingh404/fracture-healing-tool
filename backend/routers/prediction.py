@@ -57,7 +57,7 @@ async def _retrain_in_background(ml, total_rows: int):
     """Run retraining in a background thread so it doesn't block the response."""
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, ml.retrain)
-    logger.info(f"Auto-retrain complete — trained on {total_rows} patients.")
+    logger.info(f"Auto-retrain complete -trained on {total_rows} patients.")
 
 
 @router.post("/predict", response_model=PredictionResult)

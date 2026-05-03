@@ -24,7 +24,7 @@ async def generate_clinical_explanation(
 ) -> str:
     api_key = settings.openai_api_key
     if not api_key:
-        logger.warning("OPENAI_API_KEY not set — returning placeholder explanation.")
+        logger.warning("OPENAI_API_KEY not set -returning placeholder explanation.")
         return _fallback_explanation(patient, inference_result, trends)
 
     try:
@@ -97,5 +97,5 @@ def _fallback_explanation(
         f"has a predicted healing probability of {prob_pct}%, classified as '{cat}' healing.\n\n"
         f"Biomarker trends show: {trends.trend_summary}\n\n"
         f"Clinical follow-up is recommended based on these results. "
-        f"(AI explanation unavailable — OPENAI_API_KEY not configured.)"
+        f"(AI explanation unavailable -OPENAI_API_KEY not configured.)"
     )

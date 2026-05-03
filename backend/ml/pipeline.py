@@ -115,7 +115,7 @@ class MLPipeline:
         if os.path.exists(scaler_path) and len(os.listdir(MODEL_SAVE_DIR)) > 1:
             self._load_models()
         else:
-            logger.info("No saved models found — training from synthetic data …")
+            logger.info("No saved models found -training from synthetic data …")
             self._train_from_csv()
 
     def _load_models(self):
@@ -203,7 +203,7 @@ def _trend_narrative(bsap, alp, p1np, callus) -> str:
     if callus[-1] > callus[0] * 1.5:
         parts.append(f"callus growing well (+{_pct_change(callus):.0f}%)")
     elif callus[-1] < callus[0] * 1.1:
-        parts.append("callus growth minimal — watch for delayed union")
+        parts.append("callus growth minimal -watch for delayed union")
 
     return "; ".join(parts).capitalize() + "."
 
@@ -243,13 +243,13 @@ def classify_category(callus_w6: float) -> HealingCategory:
 def extract_risk_flags(trends: BiomarkerTrends) -> list[str]:
     flags = []
     if trends.bsap_delta_pct < -10:
-        flags.append("BSAP declining — reduced osteoblast activity")
+        flags.append("BSAP declining -reduced osteoblast activity")
     if trends.alp_delta_pct < -15:
-        flags.append("ALP declining at week 6 — may indicate impaired bone metabolism")
+        flags.append("ALP declining at week 6 -may indicate impaired bone metabolism")
     if trends.callus_delta_pct < 20:
-        flags.append("Callus growth < 20% from Day 1 — risk of delayed union")
+        flags.append("Callus growth < 20% from Day 1 -risk of delayed union")
     if trends.p1np_delta_pct < 0:
-        flags.append("P1NP trend negative — collagen synthesis may be impaired")
+        flags.append("P1NP trend negative -collagen synthesis may be impaired")
     return flags
 
 
@@ -260,9 +260,9 @@ def generate_recommendations(inference_result: dict, trends: BiomarkerTrends) ->
         recs.append("Consider early clinical intervention for non-union risk")
         recs.append("Repeat biomarker panel at week 9 if callus remains low")
     elif prob < 0.70:
-        recs.append("Continue monitoring — schedule week-9 follow-up radiograph")
+        recs.append("Continue monitoring -schedule week-9 follow-up radiograph")
         recs.append("Nutritional assessment (calcium/vitamin D) recommended")
     else:
-        recs.append("Healing trajectory appears normal — maintain current management")
+        recs.append("Healing trajectory appears normal -maintain current management")
         recs.append("Standard 12-week follow-up X-ray sufficient")
     return recs

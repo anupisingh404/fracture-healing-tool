@@ -235,7 +235,7 @@ footer {
 }
 
 /* =====================================================================
-   Dashboard — layout
+   Dashboard -layout
    ===================================================================== */
 .dashboard-layout {
   display: grid; grid-template-columns: 460px 1fr;

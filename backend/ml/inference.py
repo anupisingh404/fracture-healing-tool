@@ -14,7 +14,7 @@ _WEIGHTS = {
 def run_inference(pipeline: MLPipeline, features: np.ndarray) -> dict:
     """
     Returns per-model class probabilities and an ensemble score.
-    Probability reported is P(Good) — index 2 in [Poor, Moderate, Good].
+    Probability reported is P(Good) -index 2 in [Poor, Moderate, Good].
     """
     X_scaled = pipeline.scaler.transform(features.reshape(1, -1))
     all_probs: dict[str, dict] = {}

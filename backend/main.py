@@ -20,7 +20,7 @@ from backend.mcp_server.server import router as mcp_router
 
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s  %(levelname)s  %(name)s — %(message)s",
+    format="%(asctime)s  %(levelname)s  %(name)s -%(message)s",
 )
 logger = logging.getLogger(__name__)
 

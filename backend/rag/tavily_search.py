@@ -19,7 +19,7 @@ def search_medical_literature(
     """
     api_key = settings.tavily_api_key
     if not api_key:
-        logger.warning("TAVILY_API_KEY not set — skipping web search.")
+        logger.warning("TAVILY_API_KEY not set -skipping web search.")
         return []
 
     try:

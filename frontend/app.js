@@ -1,4 +1,4 @@
-// Dashboard logic — pure ES6, no bundler
+// Dashboard logic -pure ES6, no bundler
 const API_BASE = "/api/v1";
 const TIME_LABELS = ["Day 1", "Week 3", "Week 6"];
 

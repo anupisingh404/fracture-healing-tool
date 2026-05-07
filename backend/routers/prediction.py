@@ -77,11 +77,11 @@ async def predict(patient: PatientInput, request: Request):
     explanation = await generate_clinical_explanation(patient, inference, trends, similar, lit)
     healing_cat = classify_category(patient.callus_w6)
 
-    # Save to ChromaDB and CSV
+    # Save to ChromaDB and CSV — log failures but don't block the prediction response
     try:
         vs.add_case(patient, healing_cat)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Failed to save patient to ChromaDB: {e}")
     try:
         ml.save_patient_to_csv(patient, healing_cat)
         request.app.state.new_patient_count = _new_patient_count(request) + 1
@@ -91,8 +91,8 @@ async def predict(patient: PatientInput, request: Request):
             total_rows = len(pd.read_csv(os.path.abspath(DATA_PATH)))
             logger.info(f"Auto-retrain triggered after {count} new patients ({total_rows} total rows).")
             asyncio.create_task(_retrain_in_background(ml, total_rows))
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Failed to save patient to CSV or schedule retrain: {e}")
 
     return PredictionResult(
         healing_probability=inference["probability"],

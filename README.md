@@ -173,10 +173,24 @@ fracture-healing-tool/
 
 ## Setup
 
+### Platform Compatibility
+
+| Platform | Status | Notes |
+|---|---|---|
+| **Linux** (Ubuntu 20.04+, Debian, Fedora) | Fully supported | Primary development platform |
+| **macOS** (12 Monterey+, Intel & Apple Silicon) | Fully supported | See Mac-specific notes below |
+| **Windows** (10/11) | Supported via WSL2 | Native Windows not tested; use WSL2 |
+
 ### Prerequisites
 
 - Python 3.11 or 3.12
 - pip
+
+> **macOS — install Python via Homebrew** (the system Python shipped with macOS is too old):
+> ```bash
+> brew install python@3.12
+> ```
+> On Apple Silicon (M1/M2/M3) the binary is at `/opt/homebrew/bin/python3`; on Intel at `/usr/local/bin/python3`.
 
 ### 1. Clone the repository
 
@@ -187,6 +201,13 @@ cd fracture-healing-tool
 
 ### 2. Create and activate a virtual environment
 
+**Linux / macOS:**
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
+
+**Windows (WSL2):**
 ```bash
 python3 -m venv venv
 source venv/bin/activate
@@ -197,6 +218,15 @@ source venv/bin/activate
 ```bash
 pip install -r backend/requirements.txt
 ```
+
+> **macOS note:** If `pip install` fails on `chromadb` or `hnswlib` with a C++ compiler error, install the Xcode command-line tools first:
+> ```bash
+> xcode-select --install
+> ```
+> On Apple Silicon you may also need:
+> ```bash
+> brew install cmake
+> ```
 
 ### 4. Configure environment variables
 
@@ -268,9 +298,12 @@ Best model: SVM (0.9664)
 
 ### 7. Start the server
 
+**Linux / macOS:**
 ```bash
 PYTHONPATH=. uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
 ```
+
+**Windows (WSL2):** same command — run it inside the WSL2 terminal.
 
 On first startup, ChromaDB is automatically seeded with all 30 real patients from `data/real_patients.csv` and 10 medical literature chunks (~30 seconds).
 
@@ -542,7 +575,15 @@ Valid `fracture_location` values: `femur`, `tibia`, `radius`, `ulna`, `humerus`,
 
 ## MCP Integration (Claude Desktop)
 
-Register this server in Claude Desktop's `claude_desktop_config.json`:
+Register this server in Claude Desktop's `claude_desktop_config.json`.
+
+**Config file location by platform:**
+
+| Platform | Path |
+|---|---|
+| macOS | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Linux | `~/.config/Claude/claude_desktop_config.json` |
+| Windows | `%APPDATA%\Claude\claude_desktop_config.json` |
 
 ```json
 {

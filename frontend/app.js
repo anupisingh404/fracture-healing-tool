@@ -1,6 +1,8 @@
 // Dashboard logic -pure ES6, no bundler
 const API_BASE = "/api/v1";
-const TIME_LABELS = ["Day 1", "Week 3", "Week 6"];
+const TIME_LABELS = ["Day 1", "Week 3"];
+
+let currentCaseId = null;
 
 const chartInstances = {};
 
@@ -41,13 +43,17 @@ document.getElementById("patient-form").addEventListener("submit", async (e) => 
       body: JSON.stringify(payload),
     });
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || `Server error ${res.status}`);
+      const body = await res.json().catch(() => ({}));
+      throw new Error(humanError(res.status, body));
     }
     const data = await res.json();
     renderResults(data);
   } catch (err) {
-    showError(err.message);
+    if (err instanceof TypeError && err.message.includes("fetch")) {
+      showError("Unable to reach the server. Please check your connection and try again.");
+    } else {
+      showError(err.message);
+    }
     showEmptyState();
   } finally {
     setLoading(false);
@@ -76,13 +82,10 @@ function collectFormData() {
     fracture_location: document.getElementById("fracture_location").value,
     biomarkers_day1:  { bsap: num("bsap_d1"),  alp: num("alp_d1"),  p1np: num("p1np_d1") },
     biomarkers_week3: { bsap: num("bsap_w3"),  alp: num("alp_w3"),  p1np: num("p1np_w3") },
-    biomarkers_week6: { bsap: num("bsap_w6"),  alp: num("alp_w6"),  p1np: num("p1np_w6") },
     minerals_day1:    { calcium: num("ca_d1"),   phosphorus: num("phos_d1") },
     minerals_week3:   { calcium: num("ca_w3"),   phosphorus: num("phos_w3") },
-    minerals_week6:   { calcium: num("ca_w6"),   phosphorus: num("phos_w6") },
     callus_d1: num("callus_d1"),
     callus_w3: num("callus_w3"),
-    callus_w6: num("callus_w6"),
   };
 }
 
@@ -99,6 +102,7 @@ function renderResults(data) {
   renderSimilarCases(data.similar_cases);
   renderExplanation(data.clinical_explanation);
   renderFlagsAndRecs(data.risk_flags, data.recommendations);
+  renderConfirmCard(data.case_id, data.healing_category);
 }
 
 // ── Gauge ──────────────────────────────────────────────────────────────────
@@ -207,7 +211,7 @@ function renderSimilarCases(cases) {
         <td>${c.age}</td>
         <td style="text-transform:capitalize">${c.gender}</td>
         <td style="text-transform:capitalize">${c.fracture_location}</td>
-        <td>${c.callus_w6.toFixed(0)} mm²</td>
+        <td>${c.callus_w3.toFixed(0)} mm²</td>
         <td><span class="outcome-pill" style="background:${bg};color:${tc}">${c.outcome}</span></td>
         <td class="sim-score">${sim}%</td>
       </tr>`);
@@ -231,6 +235,99 @@ function renderFlagsAndRecs(flags, recs) {
   recsEl.innerHTML = recs && recs.length
     ? recs.map((r) => `<div class="rec-item">💡 ${r}</div>`).join("")
     : '<div class="rec-item">Standard follow-up recommended.</div>';
+}
+
+// ── Confirm outcome card ───────────────────────────────────────────────────
+function renderConfirmCard(caseId, predictedCategory) {
+  currentCaseId = caseId;
+  document.getElementById("confirm-case-id").textContent = caseId || "—";
+
+  // Pre-select the predicted category in the dropdown
+  const sel = document.getElementById("confirm-outcome-select");
+  if (predictedCategory && sel) {
+    sel.value = predictedCategory;
+  }
+
+  // Reset feedback
+  const fb = document.getElementById("confirm-feedback");
+  fb.style.display = "none";
+  fb.textContent = "";
+}
+
+document.getElementById("confirm-outcome-btn")?.addEventListener("click", async () => {
+  if (!currentCaseId) {
+    showConfirmFeedback("No prediction case to confirm.", false);
+    return;
+  }
+
+  const outcome = document.getElementById("confirm-outcome-select").value;
+  const btn = document.getElementById("confirm-outcome-btn");
+  const btnText = document.getElementById("confirm-btn-text");
+  const spinner = document.getElementById("confirm-spinner");
+
+  btn.disabled = true;
+  btnText.textContent = "Confirming…";
+  spinner.style.display = "inline-block";
+
+  try {
+    const res = await fetch(`${API_BASE}/prediction/confirm-outcome`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ case_id: currentCaseId, actual_outcome: outcome }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(body.detail || `Error ${res.status}`);
+    }
+    const msg = body.retrain_triggered
+      ? `✅ Outcome confirmed! Model retraining triggered (${body.confirmed_count} total confirmed).`
+      : `✅ Outcome confirmed and saved (${body.confirmed_count} confirmed — retraining at every ${body.confirmed_count % 10 === 0 ? 10 : 10 - (body.confirmed_count % 10)} more).`;
+    showConfirmFeedback(msg, true);
+  } catch (err) {
+    showConfirmFeedback(`Failed: ${err.message}`, false);
+  } finally {
+    btn.disabled = false;
+    btnText.textContent = "Confirm Outcome";
+    spinner.style.display = "none";
+  }
+});
+
+function showConfirmFeedback(msg, success) {
+  const fb = document.getElementById("confirm-feedback");
+  fb.textContent = msg;
+  fb.style.display = "block";
+  fb.style.background = success ? "#dcfce7" : "#fee2e2";
+  fb.style.color = success ? "#166534" : "#991b1b";
+  fb.style.border = `1px solid ${success ? "#bbf7d0" : "#fecaca"}`;
+}
+
+// ── Error helpers ──────────────────────────────────────────────────────────
+function humanError(status, body) {
+  if (status === 422) {
+    const details = body.detail;
+    if (Array.isArray(details) && details.length > 0) {
+      const msgs = details.map((d) => {
+        const field = d.loc ? d.loc[d.loc.length - 1] : "";
+        const fieldLabel = {
+          phone_no: "Phone Number",
+          age: "Age",
+          gender: "Gender",
+          fracture_location: "Fracture Location",
+          bsap: "BSAP", alp: "ALP", p1np: "P1NP",
+          calcium: "Calcium", phosphorus: "Phosphorus",
+          callus_d1: "Callus (Day 1)", callus_w3: "Callus (Week 3)",
+        }[field] || field;
+        return `${fieldLabel}: ${d.msg}`;
+      });
+      return msgs.join(" · ");
+    }
+    return "Please check all fields are filled in correctly.";
+  }
+  if (status === 500) return "Something went wrong on the server. Please try again.";
+  if (status === 503) return "The prediction service is temporarily unavailable. Please try again shortly.";
+  if (status === 404) return "Prediction service not found. Please contact support.";
+  if (body && body.detail) return String(body.detail);
+  return `Unexpected error (code ${status}). Please try again.`;
 }
 
 // ── UI helpers ─────────────────────────────────────────────────────────────

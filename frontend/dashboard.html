@@ -42,23 +42,23 @@
           <div class="form-row">
             <div class="form-group">
               <label for="patient_name">Full Name</label>
-              <input type="text" id="patient_name" placeholder="e.g. John Smith" />
+              <input type="text" id="patient_name" placeholder="e.g. Anupi Singh" />
             </div>
             <div class="form-group">
               <label for="phone_no">Phone Number</label>
-              <input type="tel" id="phone_no" placeholder="e.g. +1 555 0123" />
+              <input type="tel" id="phone_no" placeholder="e.g. +91 98765 43210" />
             </div>
           </div>
           <div class="form-row mt-16">
             <div class="form-group">
               <label for="age">Age (years)</label>
-              <input type="number" id="age" min="0" max="120" placeholder="e.g. 45" required />
+              <input type="number" id="age" min="0" max="120" placeholder="e.g. 26" required />
             </div>
             <div class="form-group">
               <label>Gender</label>
               <div class="radio-group">
-                <label class="radio-label"><input type="radio" name="gender" value="male" checked /> Male</label>
-                <label class="radio-label"><input type="radio" name="gender" value="female" /> Female</label>
+                <label class="radio-label"><input type="radio" name="gender" value="male" /> Male</label>
+                <label class="radio-label"><input type="radio" name="gender" value="female" checked /> Female</label>
                 <label class="radio-label"><input type="radio" name="gender" value="other" /> Other</label>
               </div>
             </div>
@@ -84,7 +84,6 @@
           <div class="tabs" id="bio-tabs">
             <button type="button" class="tab-btn active" data-tab="bio-d1">Day 1</button>
             <button type="button" class="tab-btn" data-tab="bio-w3">Week 3</button>
-            <button type="button" class="tab-btn" data-tab="bio-w6">Week 6</button>
           </div>
           <div id="bio-d1" class="tab-panel active">
             <div class="form-row cols-3">
@@ -100,13 +99,6 @@
               <div class="form-group"><label>P1NP (ng/mL)</label><input type="number" id="p1np_w3" step="0.1" placeholder="e.g. 65" /></div>
             </div>
           </div>
-          <div id="bio-w6" class="tab-panel">
-            <div class="form-row cols-3">
-              <div class="form-group"><label>BSAP (U/L)</label><input type="number" id="bsap_w6" step="0.1" placeholder="e.g. 42" /></div>
-              <div class="form-group"><label>ALP (U/L)</label><input type="number" id="alp_w6" step="0.1" placeholder="e.g. 105" /></div>
-              <div class="form-group"><label>P1NP (ng/mL)</label><input type="number" id="p1np_w6" step="0.1" placeholder="e.g. 78" /></div>
-            </div>
-          </div>
         </div>
 
         <!-- Mineral Markers -->
@@ -115,7 +107,6 @@
           <div class="tabs" id="min-tabs">
             <button type="button" class="tab-btn active" data-tab="min-d1">Day 1</button>
             <button type="button" class="tab-btn" data-tab="min-w3">Week 3</button>
-            <button type="button" class="tab-btn" data-tab="min-w6">Week 6</button>
           </div>
           <div id="min-d1" class="tab-panel active">
             <div class="form-row">
@@ -129,21 +120,14 @@
               <div class="form-group"><label>Phosphorus (mg/dL)</label><input type="number" id="phos_w3" step="0.1" placeholder="e.g. 3.4" /></div>
             </div>
           </div>
-          <div id="min-w6" class="tab-panel">
-            <div class="form-row">
-              <div class="form-group"><label>Calcium (mg/dL)</label><input type="number" id="ca_w6" step="0.1" placeholder="e.g. 9.6" /></div>
-              <div class="form-group"><label>Phosphorus (mg/dL)</label><input type="number" id="phos_w6" step="0.1" placeholder="e.g. 3.6" /></div>
-            </div>
-          </div>
         </div>
 
         <!-- Radiological Callus -->
         <div class="form-section">
           <div class="form-section-title">Radiological Callus (mm²)</div>
-          <div class="form-row cols-3">
+          <div class="form-row">
             <div class="form-group"><label>Day 1</label><input type="number" id="callus_d1" step="0.1" placeholder="e.g. 20" /></div>
             <div class="form-group"><label>Week 3</label><input type="number" id="callus_w3" step="0.1" placeholder="e.g. 80" /></div>
-            <div class="form-group"><label>Week 6</label><input type="number" id="callus_w6" step="0.1" placeholder="e.g. 190" /></div>
           </div>
         </div>
 
@@ -213,7 +197,7 @@
           <thead>
             <tr>
               <th>Name</th><th>Phone</th><th>Age</th><th>Gender</th>
-              <th>Location</th><th>Callus W6</th><th>Outcome</th><th>Similarity</th>
+              <th>Location</th><th>Callus W3</th><th>Outcome</th><th>Similarity</th>
             </tr>
           </thead>
           <tbody id="cases-tbody"></tbody>
@@ -241,11 +225,32 @@
         </div>
       </div>
 
+      <!-- Card 6: Confirm actual outcome -->
+      <div class="result-card" id="confirm-card">
+        <div class="result-card-title">Confirm Actual Outcome</div>
+        <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:16px">
+          Once the patient's actual healing outcome is known, confirm it here so the model can learn from real clinical data.
+        </p>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <span style="font-size:0.8rem;color:var(--text-muted)">Case ID: <code id="confirm-case-id" style="font-size:0.8rem;background:#f1f5f9;padding:2px 6px;border-radius:4px">—</code></span>
+          <select id="confirm-outcome-select" style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:0.88rem;background:var(--surface)">
+            <option value="Good">Good</option>
+            <option value="Moderate">Moderate</option>
+            <option value="Poor">Poor</option>
+          </select>
+          <button id="confirm-outcome-btn" class="submit-btn" style="padding:10px 20px;font-size:0.88rem;width:auto">
+            <span id="confirm-btn-text">Confirm Outcome</span>
+            <span id="confirm-spinner" class="spinner" style="display:none"></span>
+          </button>
+        </div>
+        <div id="confirm-feedback" style="display:none;margin-top:12px;padding:10px 14px;border-radius:8px;font-size:0.85rem;"></div>
+      </div>
+
     </div>
   </div>
 
 </div>
 
-<script type="module" src="app.js"></script>
+<script type="module" src="app.js?v=4"></script>
 </body>
 </html>

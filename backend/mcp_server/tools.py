@@ -23,7 +23,7 @@ async def _predict(args: dict, state) -> dict:
     patient = PatientInput(**args)
     features, _ = state.ml_pipeline.featurize(patient)
     result = run_inference(state.ml_pipeline, features)
-    category = classify_category(patient.callus_w6)
+    category = classify_category(patient.callus_w3)
     return {
         "healing_probability_pct": f"{round(result['probability'] * 100)}%",
         "healing_category": category.value,

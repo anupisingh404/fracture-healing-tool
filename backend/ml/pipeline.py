@@ -1,9 +1,12 @@
 from __future__ import annotations
+import json
+import uuid
 import numpy as np
 import pandas as pd
 import joblib
 import os
 import logging
+from datetime import datetime
 from sklearn.preprocessing import StandardScaler
 
 from backend.schemas.patient import PatientInput, BiomarkerTrends, HealingCategory
@@ -20,6 +23,46 @@ LABEL_INV = {v: k for k, v in LABEL_MAP.items()}
 
 MODEL_SAVE_DIR = os.path.join(os.path.dirname(__file__), "saved_models")
 DATA_PATH = os.path.join(os.path.dirname(__file__), "../../data/sample_patients.csv")
+PENDING_PATH = os.path.join(os.path.dirname(__file__), "../../data/pending_patients.json")
+
+
+# ------------------------------------------------------------------
+# Pending patient store (awaiting clinician outcome confirmation)
+# ------------------------------------------------------------------
+
+def _load_pending() -> dict:
+    if os.path.exists(PENDING_PATH):
+        with open(PENDING_PATH, "r") as f:
+            return json.load(f)
+    return {}
+
+
+def _save_pending(data: dict) -> None:
+    os.makedirs(os.path.dirname(PENDING_PATH), exist_ok=True)
+    with open(PENDING_PATH, "w") as f:
+        json.dump(data, f, indent=2)
+
+
+def store_pending_patient(patient: PatientInput, predicted_outcome: HealingCategory) -> str:
+    case_id = str(uuid.uuid4())
+    pending = _load_pending()
+    pending[case_id] = {
+        "patient": patient.model_dump(),
+        "predicted_outcome": predicted_outcome.value,
+        "timestamp": datetime.utcnow().isoformat(),
+    }
+    _save_pending(pending)
+    logger.info(f"Stored pending patient {case_id} (predicted: {predicted_outcome.value})")
+    return case_id
+
+
+def confirm_pending_patient(case_id: str, actual_outcome: HealingCategory) -> dict | None:
+    pending = _load_pending()
+    entry = pending.pop(case_id, None)
+    if entry is None:
+        return None
+    _save_pending(pending)
+    return entry["patient"]
 
 
 class MLPipeline:
@@ -38,18 +81,18 @@ class MLPipeline:
         gender_enc = GENDER_MAP.get(p.gender.value, 2)
         loc_enc = LOCATION_MAP.get(p.fracture_location.value, 0)
 
-        bsap = [p.biomarkers_day1.bsap, p.biomarkers_week3.bsap, p.biomarkers_week6.bsap]
-        alp = [p.biomarkers_day1.alp, p.biomarkers_week3.alp, p.biomarkers_week6.alp]
-        p1np = [p.biomarkers_day1.p1np, p.biomarkers_week3.p1np, p.biomarkers_week6.p1np]
-        ca = [p.minerals_day1.calcium, p.minerals_week3.calcium, p.minerals_week6.calcium]
-        phos = [p.minerals_day1.phosphorus, p.minerals_week3.phosphorus, p.minerals_week6.phosphorus]
-        callus = [p.callus_d1, p.callus_w3, p.callus_w6]
+        bsap = [p.biomarkers_day1.bsap, p.biomarkers_week3.bsap]
+        alp = [p.biomarkers_day1.alp, p.biomarkers_week3.alp]
+        p1np = [p.biomarkers_day1.p1np, p.biomarkers_week3.p1np]
+        ca = [p.minerals_day1.calcium, p.minerals_week3.calcium]
+        phos = [p.minerals_day1.phosphorus, p.minerals_week3.phosphorus]
+        callus = [p.callus_d1, p.callus_w3]
 
         def delta(s): return s[-1] - s[0]
 
-        bsap_alp_ratio = bsap[2] / (alp[2] + 1e-9)
-        ca_phos_product = ca[2] * phos[2]
-        callus_growth_rate = (callus[2] - callus[0]) / 42.0  # per day (6 weeks)
+        bsap_alp_ratio = bsap[1] / (alp[1] + 1e-9)
+        ca_phos_product = ca[1] * phos[1]
+        callus_growth_rate = (callus[1] - callus[0]) / 21.0  # per day (3 weeks)
 
         features = [
             p.age, gender_enc, loc_enc,
@@ -58,22 +101,22 @@ class MLPipeline:
             *callus,
             delta(bsap), delta(alp), delta(p1np),
             delta(ca), delta(phos),
-            callus[1] - callus[0], callus[2] - callus[1], delta(callus),
+            callus[1] - callus[0],
             bsap_alp_ratio, ca_phos_product, callus_growth_rate,
         ]
 
         names = [
             "age", "gender", "fracture_location",
-            "bsap_d1", "bsap_w3", "bsap_w6",
-            "alp_d1", "alp_w3", "alp_w6",
-            "p1np_d1", "p1np_w3", "p1np_w6",
-            "ca_d1", "ca_w3", "ca_w6",
-            "phos_d1", "phos_w3", "phos_w6",
-            "callus_d1", "callus_w3", "callus_w6",
+            "bsap_d1", "bsap_w3",
+            "alp_d1", "alp_w3",
+            "p1np_d1", "p1np_w3",
+            "ca_d1", "ca_w3",
+            "phos_d1", "phos_w3",
+            "callus_d1", "callus_w3",
             "bsap_delta", "alp_delta", "p1np_delta",
             "ca_delta", "phos_delta",
-            "callus_d1_w3", "callus_w3_w6", "callus_d1_w6",
-            "bsap_alp_ratio_w6", "ca_phos_product_w6", "callus_growth_rate",
+            "callus_d1_w3",
+            "bsap_alp_ratio_w3", "ca_phos_product_w3", "callus_growth_rate",
         ]
 
         return np.array(features, dtype=float), names
@@ -86,23 +129,21 @@ class MLPipeline:
             df["age"],
             df["gender"].map(GENDER_MAP).fillna(2),
             df["fracture_location"].map(LOCATION_MAP).fillna(0),
-            df["bsap_d1"], df["bsap_w3"], df["bsap_w6"],
-            df["alp_d1"], df["alp_w3"], df["alp_w6"],
-            df["p1np_d1"], df["p1np_w3"], df["p1np_w6"],
-            df["ca_d1"], df["ca_w3"], df["ca_w6"],
-            df["phos_d1"], df["phos_w3"], df["phos_w6"],
-            df["callus_d1"], df["callus_w3"], df["callus_w6"],
-            _delta("bsap_d1", "bsap_w6"),
-            _delta("alp_d1", "alp_w6"),
-            _delta("p1np_d1", "p1np_w6"),
-            _delta("ca_d1", "ca_w6"),
-            _delta("phos_d1", "phos_w6"),
+            df["bsap_d1"], df["bsap_w3"],
+            df["alp_d1"], df["alp_w3"],
+            df["p1np_d1"], df["p1np_w3"],
+            df["ca_d1"], df["ca_w3"],
+            df["phos_d1"], df["phos_w3"],
+            df["callus_d1"], df["callus_w3"],
+            _delta("bsap_d1", "bsap_w3"),
+            _delta("alp_d1", "alp_w3"),
+            _delta("p1np_d1", "p1np_w3"),
+            _delta("ca_d1", "ca_w3"),
+            _delta("phos_d1", "phos_w3"),
             _delta("callus_d1", "callus_w3"),
-            _delta("callus_w3", "callus_w6"),
-            _delta("callus_d1", "callus_w6"),
-            df["bsap_w6"] / (df["alp_w6"] + 1e-9),
-            df["ca_w6"] * df["phos_w6"],
-            (df["callus_w6"] - df["callus_d1"]) / 42.0,
+            df["bsap_w3"] / (df["alp_w3"] + 1e-9),
+            df["ca_w3"] * df["phos_w3"],
+            (df["callus_w3"] - df["callus_d1"]) / 21.0,
         ])
         return X.astype(float)
 
@@ -128,7 +169,12 @@ class MLPipeline:
         scores_path = os.path.join(MODEL_SAVE_DIR, "cv_scores.pkl")
         if os.path.exists(scores_path):
             self.cv_scores = joblib.load(scores_path)
-        logger.info(f"Loaded {len(self.models)} models from disk.")
+        best_path = os.path.join(MODEL_SAVE_DIR, "best_model_name.pkl")
+        if os.path.exists(best_path):
+            self.best_model_name = joblib.load(best_path)
+        elif self.cv_scores:
+            self.best_model_name = max(self.cv_scores, key=self.cv_scores.get)
+        logger.info(f"Loaded {len(self.models)} models from disk. Best: {self.best_model_name}")
 
     def _train_from_csv(self):
         from backend.ml.trainer import train_all
@@ -148,6 +194,7 @@ class MLPipeline:
         os.makedirs(MODEL_SAVE_DIR, exist_ok=True)
         joblib.dump(self.scaler, os.path.join(MODEL_SAVE_DIR, "scaler.pkl"))
         joblib.dump(self.cv_scores, os.path.join(MODEL_SAVE_DIR, "cv_scores.pkl"))
+        joblib.dump(self.best_model_name, os.path.join(MODEL_SAVE_DIR, "best_model_name.pkl"))
         for name, model in self.models.items():
             joblib.dump(model, os.path.join(MODEL_SAVE_DIR, f"{name}.pkl"))
         logger.info("Models saved to disk.")
@@ -163,11 +210,9 @@ class MLPipeline:
             "fracture_location": p.fracture_location.value,
             "bsap_d1": p.biomarkers_day1.bsap,   "alp_d1": p.biomarkers_day1.alp,   "p1np_d1": p.biomarkers_day1.p1np,
             "bsap_w3": p.biomarkers_week3.bsap,  "alp_w3": p.biomarkers_week3.alp,  "p1np_w3": p.biomarkers_week3.p1np,
-            "bsap_w6": p.biomarkers_week6.bsap,  "alp_w6": p.biomarkers_week6.alp,  "p1np_w6": p.biomarkers_week6.p1np,
             "ca_d1": p.minerals_day1.calcium,     "phos_d1": p.minerals_day1.phosphorus,
             "ca_w3": p.minerals_week3.calcium,    "phos_w3": p.minerals_week3.phosphorus,
-            "ca_w6": p.minerals_week6.calcium,    "phos_w6": p.minerals_week6.phosphorus,
-            "callus_d1": p.callus_d1, "callus_w3": p.callus_w3, "callus_w6": p.callus_w6,
+            "callus_d1": p.callus_d1, "callus_w3": p.callus_w3,
             "healing_category": outcome.value,
         }
         csv_path = os.path.abspath(DATA_PATH)
@@ -210,12 +255,12 @@ def _trend_narrative(bsap, alp, p1np, callus) -> str:
 
 def compute_trends(patient: PatientInput) -> BiomarkerTrends:
     p = patient
-    bsap = [p.biomarkers_day1.bsap, p.biomarkers_week3.bsap, p.biomarkers_week6.bsap]
-    alp = [p.biomarkers_day1.alp, p.biomarkers_week3.alp, p.biomarkers_week6.alp]
-    p1np = [p.biomarkers_day1.p1np, p.biomarkers_week3.p1np, p.biomarkers_week6.p1np]
-    ca = [p.minerals_day1.calcium, p.minerals_week3.calcium, p.minerals_week6.calcium]
-    phos = [p.minerals_day1.phosphorus, p.minerals_week3.phosphorus, p.minerals_week6.phosphorus]
-    callus = [p.callus_d1, p.callus_w3, p.callus_w6]
+    bsap = [p.biomarkers_day1.bsap, p.biomarkers_week3.bsap]
+    alp = [p.biomarkers_day1.alp, p.biomarkers_week3.alp]
+    p1np = [p.biomarkers_day1.p1np, p.biomarkers_week3.p1np]
+    ca = [p.minerals_day1.calcium, p.minerals_week3.calcium]
+    phos = [p.minerals_day1.phosphorus, p.minerals_week3.phosphorus]
+    callus = [p.callus_d1, p.callus_w3]
 
     return BiomarkerTrends(
         bsap_trend=bsap,
@@ -232,10 +277,10 @@ def compute_trends(patient: PatientInput) -> BiomarkerTrends:
     )
 
 
-def classify_category(callus_w6: float) -> HealingCategory:
-    if callus_w6 < 100:
+def classify_category(callus_w3: float) -> HealingCategory:
+    if callus_w3 < 40:
         return HealingCategory.POOR
-    if callus_w6 <= 180:
+    if callus_w3 <= 72:
         return HealingCategory.MODERATE
     return HealingCategory.GOOD
 
@@ -245,7 +290,7 @@ def extract_risk_flags(trends: BiomarkerTrends) -> list[str]:
     if trends.bsap_delta_pct < -10:
         flags.append("BSAP declining -reduced osteoblast activity")
     if trends.alp_delta_pct < -15:
-        flags.append("ALP declining at week 6 -may indicate impaired bone metabolism")
+        flags.append("ALP declining at week 3 -may indicate impaired bone metabolism")
     if trends.callus_delta_pct < 20:
         flags.append("Callus growth < 20% from Day 1 -risk of delayed union")
     if trends.p1np_delta_pct < 0:

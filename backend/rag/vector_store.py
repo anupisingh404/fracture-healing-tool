@@ -61,7 +61,7 @@ class VectorStore:
                 f"Patient: {name} (Phone: {phone}). "
                 f"{patient.age}yo {patient.gender.value} with "
                 f"{patient.fracture_location.value} fracture. "
-                f"Callus week6={patient.callus_w6:.0f}. Outcome: {outcome.value}."
+                f"Callus week3={patient.callus_w3:.0f}. Outcome: {outcome.value}."
             )
         embedding = embed_patient(patient).tolist()
         self.cases_col.add(
@@ -71,7 +71,7 @@ class VectorStore:
                 "age": patient.age,
                 "gender": patient.gender.value,
                 "fracture_location": patient.fracture_location.value,
-                "callus_w6": patient.callus_w6,
+                "callus_w3": patient.callus_w3,
                 "outcome": outcome.value,
                 "patient_name": name,
                 "phone_no": phone,
@@ -139,9 +139,9 @@ class VectorStore:
             summary = (
                 f"Patient: {name} (Phone: {phone}). "
                 f"{int(row['age'])}yo {row['gender']} with {row['fracture_location']} fracture. "
-                f"BSAP day1={row['bsap_d1']:.1f}→week6={row['bsap_w6']:.1f}. "
-                f"ALP day1={row['alp_d1']:.1f}→week6={row['alp_w6']:.1f}. "
-                f"Callus week6={row['callus_w6']:.0f}. Outcome: {outcome_str}."
+                f"BSAP day1={row['bsap_d1']:.1f}→week3={row['bsap_w3']:.1f}. "
+                f"ALP day1={row['alp_d1']:.1f}→week3={row['alp_w3']:.1f}. "
+                f"Callus week3={row['callus_w3']:.0f}. Outcome: {outcome_str}."
             )
             self.cases_col.add(
                 ids=[row["patient_id"]],
@@ -150,7 +150,7 @@ class VectorStore:
                     "age": int(row["age"]),
                     "gender": row["gender"],
                     "fracture_location": row["fracture_location"],
-                    "callus_w6": float(row["callus_w6"]),
+                    "callus_w3": float(row["callus_w3"]),
                     "outcome": outcome_str,
                     "patient_name": str(name),
                     "phone_no": str(phone),

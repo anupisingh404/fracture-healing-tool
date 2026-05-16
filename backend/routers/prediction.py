@@ -5,10 +5,14 @@ import os
 import pandas as pd
 
 from fastapi import APIRouter, Request, HTTPException
-from backend.schemas.patient import PatientInput, PredictionResult, BiomarkerTrends
+from backend.schemas.patient import (
+    PatientInput, PredictionResult, BiomarkerTrends,
+    ConfirmOutcomeRequest, ConfirmOutcomeResponse, HealingCategory,
+)
 from backend.ml.pipeline import (
     compute_trends, classify_category,
     extract_risk_flags, generate_recommendations, DATA_PATH,
+    store_pending_patient, confirm_pending_patient,
 )
 from backend.ml.inference import run_inference
 from backend.rag.retriever import retrieve_similar_cases
@@ -47,17 +51,21 @@ def get_vector_store(request: Request):
 
 
 def _new_patient_count(request: Request) -> int:
-    """Track how many new patients have been saved since last retrain."""
     if not hasattr(request.app.state, 'new_patient_count'):
         request.app.state.new_patient_count = 0
     return request.app.state.new_patient_count
 
 
+def _confirmed_count(request: Request) -> int:
+    if not hasattr(request.app.state, 'confirmed_count'):
+        request.app.state.confirmed_count = 0
+    return request.app.state.confirmed_count
+
+
 async def _retrain_in_background(ml, total_rows: int):
-    """Run retraining in a background thread so it doesn't block the response."""
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, ml.retrain)
-    logger.info(f"Auto-retrain complete -trained on {total_rows} patients.")
+    logger.info(f"Auto-retrain complete - trained on {total_rows} patients.")
 
 
 @router.post("/predict", response_model=PredictionResult)
@@ -75,26 +83,23 @@ async def predict(patient: PatientInput, request: Request):
         trends.trend_summary,
     )
     explanation = await generate_clinical_explanation(patient, inference, trends, similar, lit)
-    healing_cat = classify_category(patient.callus_w6)
+    healing_cat = classify_category(patient.callus_w3)
 
-    # Save to ChromaDB and CSV — log failures but don't block the prediction response
+    # Store patient as pending — outcome will be confirmed by the clinician
+    case_id = ""
+    try:
+        case_id = store_pending_patient(patient, healing_cat)
+    except Exception as e:
+        logger.warning(f"Failed to store pending patient: {e}")
+
+    # Also add to ChromaDB for immediate similarity search use
     try:
         vs.add_case(patient, healing_cat)
     except Exception as e:
         logger.warning(f"Failed to save patient to ChromaDB: {e}")
-    try:
-        ml.save_patient_to_csv(patient, healing_cat)
-        request.app.state.new_patient_count = _new_patient_count(request) + 1
-        count = request.app.state.new_patient_count
-
-        if count % RETRAIN_EVERY_N == 0:
-            total_rows = len(pd.read_csv(os.path.abspath(DATA_PATH)))
-            logger.info(f"Auto-retrain triggered after {count} new patients ({total_rows} total rows).")
-            asyncio.create_task(_retrain_in_background(ml, total_rows))
-    except Exception as e:
-        logger.warning(f"Failed to save patient to CSV or schedule retrain: {e}")
 
     return PredictionResult(
+        case_id=case_id,
         healing_probability=inference["probability"],
         healing_probability_pct=f"{round(inference['probability'] * 100)}% probability of successful healing",
         healing_category=healing_cat,
@@ -108,6 +113,44 @@ async def predict(patient: PatientInput, request: Request):
     )
 
 
+@router.post("/confirm-outcome", response_model=ConfirmOutcomeResponse)
+async def confirm_outcome(req: ConfirmOutcomeRequest, request: Request):
+    ml = get_ml_pipeline(request)
+
+    patient_data = confirm_pending_patient(req.case_id, req.actual_outcome)
+    if patient_data is None:
+        raise HTTPException(status_code=404, detail=f"Case ID '{req.case_id}' not found or already confirmed.")
+
+    # Reconstruct PatientInput and save with the real confirmed label
+    try:
+        patient = PatientInput(**patient_data)
+        ml.save_patient_to_csv(patient, req.actual_outcome)
+    except Exception as e:
+        logger.error(f"Failed to save confirmed patient to CSV: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save confirmed outcome.")
+
+    # Track and possibly trigger retrain
+    request.app.state.confirmed_count = _confirmed_count(request) + 1
+    confirmed = request.app.state.confirmed_count
+    retrain_triggered = False
+
+    if confirmed % RETRAIN_EVERY_N == 0:
+        try:
+            total_rows = len(pd.read_csv(os.path.abspath(DATA_PATH)))
+            logger.info(f"Auto-retrain triggered after {confirmed} confirmed outcomes ({total_rows} total rows).")
+            asyncio.create_task(_retrain_in_background(ml, total_rows))
+            retrain_triggered = True
+        except Exception as e:
+            logger.warning(f"Failed to schedule retrain: {e}")
+
+    return ConfirmOutcomeResponse(
+        message=f"Outcome '{req.actual_outcome.value}' confirmed and saved for case {req.case_id}.",
+        case_id=req.case_id,
+        confirmed_count=confirmed,
+        retrain_triggered=retrain_triggered,
+    )
+
+
 @router.post("/biomarker-trends", response_model=BiomarkerTrends)
 def biomarker_trends(patient: PatientInput):
     return compute_trends(patient)
@@ -115,7 +158,7 @@ def biomarker_trends(patient: PatientInput):
 
 @router.get("/models")
 def list_models(request: Request):
-    ml = request.app.state.ml_pipeline
+    ml = get_ml_pipeline(request)
     return {
         "models": list(ml.models.keys()),
         "best_model": ml.best_model_name,
@@ -128,7 +171,8 @@ def retrain_models(request: Request):
     ml = get_ml_pipeline(request)
     row_count = len(pd.read_csv(os.path.abspath(DATA_PATH)))
     cv_scores = ml.retrain()
-    request.app.state.new_patient_count = 0  # reset counter after manual retrain
+    request.app.state.new_patient_count = 0
+    request.app.state.confirmed_count = 0
     return {
         "status": "retrained",
         "training_rows": row_count,

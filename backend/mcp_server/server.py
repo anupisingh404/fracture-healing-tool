@@ -11,9 +11,9 @@ PATIENT_INPUT_SCHEMA = {
     "type": "object",
     "required": [
         "age", "gender", "fracture_location",
-        "biomarkers_day1", "biomarkers_week3", "biomarkers_week6",
-        "minerals_day1", "minerals_week3", "minerals_week6",
-        "callus_d1", "callus_w3", "callus_w6",
+        "biomarkers_day1", "biomarkers_week3",
+        "minerals_day1", "minerals_week3",
+        "callus_d1", "callus_w3",
     ],
     "properties": {
         "age": {"type": "integer", "minimum": 0, "maximum": 120},
@@ -24,13 +24,10 @@ PATIENT_INPUT_SCHEMA = {
         },
         "biomarkers_day1":  {"$ref": "#/definitions/BiomarkerSet"},
         "biomarkers_week3": {"$ref": "#/definitions/BiomarkerSet"},
-        "biomarkers_week6": {"$ref": "#/definitions/BiomarkerSet"},
         "minerals_day1":    {"$ref": "#/definitions/MineralSet"},
         "minerals_week3":   {"$ref": "#/definitions/MineralSet"},
-        "minerals_week6":   {"$ref": "#/definitions/MineralSet"},
         "callus_d1":  {"type": "number", "minimum": 0},
         "callus_w3":  {"type": "number", "minimum": 0},
-        "callus_w6":  {"type": "number", "minimum": 0},
     },
     "definitions": {
         "BiomarkerSet": {
@@ -59,7 +56,7 @@ MCP_TOOLS = [
     },
     {
         "name": "analyze_biomarker_trends",
-        "description": "Analyze trend changes in BSAP, ALP, P1NP, and callus across Day1/Week3/Week6",
+        "description": "Analyze trend changes in BSAP, ALP, P1NP, and callus across Day1/Week3",
         "inputSchema": PATIENT_INPUT_SCHEMA,
     },
     {

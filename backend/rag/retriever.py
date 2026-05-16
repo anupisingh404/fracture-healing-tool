@@ -16,7 +16,7 @@ def retrieve_similar_cases(
             age=int(r["age"]),
             gender=r["gender"],
             fracture_location=r["fracture_location"],
-            callus_w6=float(r["callus_w6"]),
+            callus_w3=float(r["callus_w3"]),
             outcome=r["outcome"],
             summary=r["summary"],
         )

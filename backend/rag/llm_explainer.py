@@ -33,7 +33,7 @@ async def generate_clinical_explanation(
 
         similar_text = "\n".join(
             f"  • Case {c.case_id}: {c.age}yo {c.gender}, {c.fracture_location}, "
-            f"callus_w6={c.callus_w6:.0f}, outcome={c.outcome} "
+            f"callus_w3={c.callus_w3:.0f}, outcome={c.outcome} "
             f"(similarity={c.similarity_score:.0%})"
             for c in similar_cases
         ) or "  No similar cases found."
@@ -52,7 +52,7 @@ ML Prediction:
   Best model: {inference_result['best_model']}
   All model P(Good): {inference_result['good_probs']}
 
-Biomarker trends (Day1 → Week3 → Week6):
+Biomarker trends (Day1 → Week3):
   BSAP:   {trends.bsap_trend}  ({trends.bsap_delta_pct:+.1f}%)
   ALP:    {trends.alp_trend}   ({trends.alp_delta_pct:+.1f}%)
   P1NP:   {trends.p1np_trend}  ({trends.p1np_delta_pct:+.1f}%)

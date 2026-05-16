@@ -41,8 +41,8 @@ Fracture healing is currently monitored through X-rays and clinical symptoms —
 - **Retrieves 3 similar historical patients** from a ChromaDB vector store using semantic similarity on biomarker summaries
 - **Searches medical literature** via Tavily to find relevant research for the patient's fracture type and biomarker pattern
 - **Generates a GPT-4o clinical narrative** grounded in ML results, biomarker trends, similar cases, and live literature
-- **Confirmed-outcome learning** — clinicians confirm the real healing outcome per case; the model trains only on confirmed labels (not predicted ones), ensuring ground-truth quality
-- **Auto-retrains ML models** in the background every 10 confirmed outcomes — accuracy improves over time without any manual step
+- **Outcome correction learning** — every prediction is saved immediately; if a clinician later confirms a different outcome, a corrected row is added and the model retrains instantly
+- **No data loss if unconfirmed** — the predicted label is already in the training CSV, so the model learns from every patient regardless of whether the clinician confirms
 - **Exposes all tools via MCP** (Model Context Protocol) so Claude Desktop can call them directly for agentic clinical workflows
 - **Validates Indian phone numbers** — accepts `+91 XXXXX XXXXX` format in the patient form
 - **Visualises biomarker trends** across Day 1 → Week 3 as interactive Chart.js line charts
@@ -154,8 +154,8 @@ fracture-healing-tool/
 │   │   └── tools.py               # 4 MCP tool handlers + dispatch()
 │   │
 │   ├── routers/
-│   │   ├── prediction.py          # POST /predict (stores pending, adds to ChromaDB),
-│   │   │                          #   POST /confirm-outcome (saves confirmed label + retrain),
+│   │   ├── prediction.py          # POST /predict (saves to CSV immediately + stores pending),
+│   │   │                          #   POST /confirm-outcome (retrain only if outcome changed),
 │   │   │                          #   POST /retrain (manual), POST /biomarker-trends,
 │   │   │                          #   GET /models
 │   │   ├── rag.py                 # POST /similar-cases, /ingest-case, GET /stats
@@ -175,10 +175,10 @@ fracture-healing-tool/
 │
 ├── data/
 │   ├── real_patients.csv          # 30 real de-identified patients (used for ChromaDB seeding)
-│   ├── sample_patients.csv        # Confirmed patient rows (ML training data)
-│   │                              #   — grows as clinicians confirm real outcomes
-│   ├── pending_patients.json      # Temporary store of patients awaiting outcome confirmation
-│   │                              #   keyed by UUID case_id; auto-cleaned on confirmation
+│   ├── sample_patients.csv        # ML training data — every prediction appended immediately;
+│   │                              #   corrected rows added when clinician overrides outcome
+│   ├── pending_patients.json      # Tracks predicted outcome per case_id so confirm-outcome
+│   │                              #   can detect corrections; auto-cleaned on confirmation
 │   └── generate_synthetic.py      # Script to regenerate base synthetic training data
 │
 ├── chroma_db/                     # ChromaDB persistent store (grows with every prediction)
@@ -421,14 +421,17 @@ Doctor fills form on dashboard.html
         │
         ▼
 ┌─────────────────────────────────────────────────────────┐
-│  Step 7: Pending Store  (prediction.py router)          │
+│  Step 7: Save & Track  (prediction.py router)           │
 │                                                         │
-│  Patient data + predicted outcome saved to              │
-│  pending_patients.json, keyed by UUID case_id           │
+│  sample_patients.csv: row appended immediately with     │
+│    predicted label (model learns even if never          │
+│    confirmed)                                           │
+│  pending_patients.json: case_id → predicted_outcome     │
+│    stored so confirm-outcome can detect corrections     │
 │  ChromaDB: patient embedding stored for similarity      │
 │                                                         │
-│  Response includes case_id — shown in UI for            │
-│  clinician to confirm the real outcome later            │
+│  Response includes case_id — shown in UI so clinician   │
+│  can correct the outcome if the prediction was wrong    │
 └─────────────────────────────────────────────────────────┘
         │
         ▼
@@ -467,7 +470,7 @@ uvicorn backend.main:app
 
 ## Confirmed-Outcome Learning
 
-FractureAI learns from **real clinician-confirmed outcomes**, not from predicted labels. This prevents the model from reinforcing its own mistakes.
+Every prediction is saved immediately to the training CSV. If a clinician later confirms the real outcome and it **differs** from what was predicted, a corrected row is added and the model retrains immediately — so it learns from its own mistakes.
 
 ### How It Works
 
@@ -476,38 +479,34 @@ FractureAI learns from **real clinician-confirmed outcomes**, not from predicted
         │
         ▼
    predict endpoint runs ML + RAG + LLM
-   Patient stored in pending_patients.json (case_id UUID)
-   ChromaDB updated (for similarity search)
+   ┌─────────────────────────────────────────────┐
+   │ sample_patients.csv ← row saved immediately │
+   │   with predicted label                      │
+   │ pending_patients.json ← case_id mapped to   │
+   │   predicted_outcome (for correction tracking)│
+   │ ChromaDB ← embedding stored                 │
+   └─────────────────────────────────────────────┘
         │
         ▼
-2. Prediction result shown on dashboard
+2. Prediction shown on dashboard
    "Confirm Actual Outcome" card shows case_id + outcome dropdown
+   (pre-filled with the predicted outcome)
         │
-        ▼
-3. Weeks later, when healing outcome is known:
-   Clinician selects real outcome (Good / Moderate / Poor)
-   Clicks "Confirm Outcome"
+        ├─── Clinician never confirms
+        │      → No problem. Predicted label already in CSV.
+        │        Model already learned from this patient.
         │
-        │  POST /api/v1/prediction/confirm-outcome
-        ▼
-   Patient retrieved from pending_patients.json by case_id
-   Patient removed from pending store
-   Patient row + REAL label written to sample_patients.csv
-        │
-        ▼
-4. Every 10 confirmed outcomes → background retrain triggered
-   Models trained on real-world ground-truth data
-   Accuracy improves over time
+        └─── Clinician confirms outcome
+                │
+                ├── actual == predicted
+                │     → "Matches prediction. No retraining needed."
+                │       Entry removed from pending. CSV already correct.
+                │
+                └── actual != predicted
+                      → Corrected row added to sample_patients.csv
+                        Model retrained immediately (background thread)
+                        "Outcome corrected (Poor → Good). Retraining triggered."
 ```
-
-### Why This Matters
-
-| Approach | Problem |
-|---|---|
-| Train on predicted labels | Model reinforces its own errors; poor-quality data |
-| Train on confirmed labels | Every training row has clinician-verified ground truth |
-
-The pending store (`data/pending_patients.json`) acts as a staging area — patients sit there until a clinician confirms the real outcome. Only then does the data reach the training CSV.
 
 ### Confirm via API
 
@@ -520,21 +519,37 @@ curl -X POST http://localhost:8000/api/v1/prediction/confirm-outcome \
   }'
 ```
 
-Response:
+**Response when outcome matches prediction:**
 ```json
 {
-  "message": "Outcome 'Good' confirmed and saved for case 392ed4d0-...",
+  "message": "Outcome confirmed as 'Good' — matches prediction. No retraining needed.",
   "case_id": "392ed4d0-7c0e-4420-b572-83095691c58a",
-  "confirmed_count": 3,
+  "confirmed_count": 0,
   "retrain_triggered": false
 }
 ```
 
-`retrain_triggered` becomes `true` when `confirmed_count` reaches a multiple of `RETRAIN_EVERY_N` (default 10).
+**Response when outcome differs from prediction:**
+```json
+{
+  "message": "Outcome corrected (Poor → Good). Corrected row saved and model retraining triggered.",
+  "case_id": "392ed4d0-7c0e-4420-b572-83095691c58a",
+  "confirmed_count": 0,
+  "retrain_triggered": true
+}
+```
+
+### Behaviour Summary
+
+| Scenario | CSV | Retrain |
+|---|---|---|
+| Clinician never confirms | Predicted label saved on predict | No |
+| Confirms — same as predicted | Already correct, no change | No |
+| Confirms — different from predicted | Corrected row appended | Yes — immediately |
 
 ### Manual Retrain
 
-Trigger a retrain at any time without waiting for 10 confirmations:
+Trigger a retrain at any time:
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/prediction/retrain
@@ -559,7 +574,7 @@ Response:
 | Method | Endpoint | Description |
 |---|---|---|
 | POST | `/api/v1/prediction/predict` | Full pipeline — returns `PredictionResult` with `case_id` |
-| POST | `/api/v1/prediction/confirm-outcome` | Confirm real outcome, save to CSV, trigger retrain if threshold met |
+| POST | `/api/v1/prediction/confirm-outcome` | If outcome differs from prediction: save corrected row + retrain immediately |
 | POST | `/api/v1/prediction/retrain` | Manually retrain all ML models from current CSV |
 | POST | `/api/v1/prediction/biomarker-trends` | Trend analysis only (no LLM, fast) |
 | GET | `/api/v1/prediction/models` | Lists loaded models and CV scores |
@@ -698,11 +713,16 @@ First run:
   data/sample_patients.csv     ──► ML models trained (synthetic base)
 
 On every prediction:
-  New patient ──► pending_patients.json (case_id → patient data)
-  New patient ──► ChromaDB (for similarity search)
+  New patient + predicted label ──► sample_patients.csv (immediate)
+  case_id → predicted_outcome   ──► pending_patients.json (for correction tracking)
+  New patient embedding         ──► ChromaDB (for similarity search)
 
-On clinician confirmation (POST /confirm-outcome):
-  Confirmed patient + real label ──► sample_patients.csv
+On clinician confirmation — same outcome:
   Entry removed from pending_patients.json
-  Every 10 confirmations ──► models retrained from full CSV (background)
+  (CSV already correct — no further action)
+
+On clinician confirmation — different outcome:
+  Corrected patient + real label ──► sample_patients.csv (new row)
+  Entry removed from pending_patients.json
+  Models retrained immediately from full CSV (background thread)
 ```

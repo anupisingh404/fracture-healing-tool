@@ -279,10 +279,7 @@ document.getElementById("confirm-outcome-btn")?.addEventListener("click", async 
     if (!res.ok) {
       throw new Error(body.detail || `Error ${res.status}`);
     }
-    const msg = body.retrain_triggered
-      ? `✅ Outcome confirmed! Model retraining triggered (${body.confirmed_count} total confirmed).`
-      : `✅ Outcome confirmed and saved (${body.confirmed_count} confirmed — retraining at every ${body.confirmed_count % 10 === 0 ? 10 : 10 - (body.confirmed_count % 10)} more).`;
-    showConfirmFeedback(msg, true);
+    showConfirmFeedback(body.message, true);
   } catch (err) {
     showConfirmFeedback(`Failed: ${err.message}`, false);
   } finally {

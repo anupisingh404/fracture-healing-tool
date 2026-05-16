@@ -56,11 +56,6 @@ def _new_patient_count(request: Request) -> int:
     return request.app.state.new_patient_count
 
 
-def _confirmed_count(request: Request) -> int:
-    if not hasattr(request.app.state, 'confirmed_count'):
-        request.app.state.confirmed_count = 0
-    return request.app.state.confirmed_count
-
 
 async def _retrain_in_background(ml, total_rows: int):
     loop = asyncio.get_event_loop()
@@ -85,14 +80,20 @@ async def predict(patient: PatientInput, request: Request):
     explanation = await generate_clinical_explanation(patient, inference, trends, similar, lit)
     healing_cat = classify_category(patient.callus_w3)
 
-    # Store patient as pending — outcome will be confirmed by the clinician
+    # Save to CSV immediately with predicted label
+    try:
+        ml.save_patient_to_csv(patient, healing_cat)
+    except Exception as e:
+        logger.warning(f"Failed to save patient to CSV: {e}")
+
+    # Store in pending so we can detect if the clinician later corrects the outcome
     case_id = ""
     try:
         case_id = store_pending_patient(patient, healing_cat)
     except Exception as e:
         logger.warning(f"Failed to store pending patient: {e}")
 
-    # Also add to ChromaDB for immediate similarity search use
+    # Add to ChromaDB for immediate similarity search use
     try:
         vs.add_case(patient, healing_cat)
     except Exception as e:
@@ -117,36 +118,40 @@ async def predict(patient: PatientInput, request: Request):
 async def confirm_outcome(req: ConfirmOutcomeRequest, request: Request):
     ml = get_ml_pipeline(request)
 
-    patient_data = confirm_pending_patient(req.case_id, req.actual_outcome)
-    if patient_data is None:
+    entry = confirm_pending_patient(req.case_id)
+    if entry is None:
         raise HTTPException(status_code=404, detail=f"Case ID '{req.case_id}' not found or already confirmed.")
 
-    # Reconstruct PatientInput and save with the real confirmed label
-    try:
-        patient = PatientInput(**patient_data)
-        ml.save_patient_to_csv(patient, req.actual_outcome)
-    except Exception as e:
-        logger.error(f"Failed to save confirmed patient to CSV: {e}")
-        raise HTTPException(status_code=500, detail="Failed to save confirmed outcome.")
-
-    # Track and possibly trigger retrain
-    request.app.state.confirmed_count = _confirmed_count(request) + 1
-    confirmed = request.app.state.confirmed_count
+    predicted_outcome = HealingCategory(entry["predicted_outcome"])
+    outcome_changed = req.actual_outcome != predicted_outcome
     retrain_triggered = False
 
-    if confirmed % RETRAIN_EVERY_N == 0:
+    if outcome_changed:
+        # Save a corrected row with the real label so the model learns from the correction
+        try:
+            patient = PatientInput(**entry["patient"])
+            ml.save_patient_to_csv(patient, req.actual_outcome)
+        except Exception as e:
+            logger.error(f"Failed to save corrected patient row to CSV: {e}")
+            raise HTTPException(status_code=500, detail="Failed to save corrected outcome.")
+
+        # Retrain immediately so the correction takes effect
         try:
             total_rows = len(pd.read_csv(os.path.abspath(DATA_PATH)))
-            logger.info(f"Auto-retrain triggered after {confirmed} confirmed outcomes ({total_rows} total rows).")
+            logger.info(f"Outcome corrected ({predicted_outcome.value} → {req.actual_outcome.value}) for case {req.case_id}. Triggering retrain on {total_rows} rows.")
             asyncio.create_task(_retrain_in_background(ml, total_rows))
             retrain_triggered = True
         except Exception as e:
             logger.warning(f"Failed to schedule retrain: {e}")
 
+        message = f"Outcome corrected ({predicted_outcome.value} → {req.actual_outcome.value}). Corrected row saved and model retraining triggered."
+    else:
+        message = f"Outcome confirmed as '{req.actual_outcome.value}' — matches prediction. No retraining needed."
+
     return ConfirmOutcomeResponse(
-        message=f"Outcome '{req.actual_outcome.value}' confirmed and saved for case {req.case_id}.",
+        message=message,
         case_id=req.case_id,
-        confirmed_count=confirmed,
+        confirmed_count=0,
         retrain_triggered=retrain_triggered,
     )
 
@@ -172,7 +177,6 @@ def retrain_models(request: Request):
     row_count = len(pd.read_csv(os.path.abspath(DATA_PATH)))
     cv_scores = ml.retrain()
     request.app.state.new_patient_count = 0
-    request.app.state.confirmed_count = 0
     return {
         "status": "retrained",
         "training_rows": row_count,

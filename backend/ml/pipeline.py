@@ -56,13 +56,14 @@ def store_pending_patient(patient: PatientInput, predicted_outcome: HealingCateg
     return case_id
 
 
-def confirm_pending_patient(case_id: str, actual_outcome: HealingCategory) -> dict | None:
+def confirm_pending_patient(case_id: str) -> dict | None:
+    """Remove and return the full pending entry (patient + predicted_outcome)."""
     pending = _load_pending()
     entry = pending.pop(case_id, None)
     if entry is None:
         return None
     _save_pending(pending)
-    return entry["patient"]
+    return entry
 
 
 class MLPipeline:
